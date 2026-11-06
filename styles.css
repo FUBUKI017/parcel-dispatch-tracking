@@ -155,7 +155,7 @@ input:focus, select:focus { border-color: #7c9af0; box-shadow: 0 0 0 3px rgba(53
 .parcel-list { display: flex; flex-direction: column; gap: 8px; }
 .loading-state, .empty-state { padding: 30px 10px; color: #8995a6; text-align: center; font-size: 12px; }
 .parcel-row {
-  display: grid; grid-template-columns: minmax(150px, 1.15fr) minmax(100px, .8fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(105px, .8fr);
+  display: grid; grid-template-columns: minmax(145px, 1.2fr) minmax(85px, .7fr) minmax(105px, .9fr) minmax(105px, .9fr) minmax(105px, .9fr) minmax(105px, .9fr) minmax(95px, .8fr);
   gap: 10px; align-items: center; padding: 13px 12px; border: 1px solid #edf0f5; border-radius: 11px; background: #fff;
 }
 .parcel-row.header-row { padding: 8px 12px; border: 0; background: #f6f8fb; color: #8290a3; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }

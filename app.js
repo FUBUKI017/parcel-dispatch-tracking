@@ -68,6 +68,7 @@
         if (!result.success) throw new Error(result.error || "Login failed.");
         state.token = result.token;
         state.role = result.role;
+        state.userName = result.name || "";
         $("loginView").classList.add("hidden");
         $("appView").classList.remove("hidden");
         $("rolePill").textContent = state.role === "WAREHOUSE" ? "WAREHOUSE" : "GUARD HOUSE";
@@ -184,7 +185,9 @@
       order.appendChild(orderText);
 
       const warehouse = makeCheckpoint("Warehouse out", p.warehouse);
+      const warehouseBy = makeScannedBy("Warehouse scanned by", p.warehouseBy);
       const guard = makeCheckpoint("Guard house out", p.guardhouse);
+      const guardBy = makeScannedBy("Guard scanned by", p.guardhouseBy);
 
       const overall = document.createElement("div");
       overall.className = "overall-status";
@@ -194,9 +197,21 @@
           ? '<span class="status-pill status-transit">IN TRANSIT</span>'
           : '<span class="status-pill status-pending">PENDING</span>';
 
-      row.append(parcel, order, warehouse, guard, overall);
+      row.append(parcel, order, warehouse, warehouseBy, guard, guardBy, overall);
       list.appendChild(row);
     });
+  }
+
+  function makeScannedBy(label, name) {
+    const cell = document.createElement("div");
+    cell.className = "status-cell";
+    const labelEl = document.createElement("span");
+    labelEl.className = "mobile-label";
+    labelEl.textContent = label;
+    const value = document.createElement("strong");
+    value.textContent = name || "—";
+    cell.append(labelEl, value);
+    return cell;
   }
 
   function makeCheckpoint(label, timestamp) {
@@ -481,6 +496,7 @@
     $("lastScanOrder").textContent = "Order " + (result.order || "—");
     $("lastScanCheckpoint").textContent = result.checkpoint;
     $("lastScanTime").textContent = result.timestamp;
+    $("lastScanScannedBy").textContent = result.scannedBy || "—";
   }
 
   function showNotice(id, text, type) {

@@ -225,3 +225,110 @@ input:focus, select:focus { border-color: #7c9af0; box-shadow: 0 0 0 3px rgba(53
 .upload-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .upload-controls input[type="file"] { flex: 1; min-width: 220px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 12px; }
 @media (max-width: 600px) { .upload-controls { align-items: stretch; flex-direction: column; } .upload-controls .button { width: 100%; } }
+
+/* Responsive dashboard refinement: desktop density, tablet cards, and phone-first controls */
+:root { --content-max: 1480px; }
+html, body { width: 100%; overflow-x: hidden; }
+button, input, select { touch-action: manipulation; }
+.topbar { position: sticky; top: 0; z-index: 20; padding-left: max(22px, calc((100vw - var(--content-max))/2)); padding-right: max(22px, calc((100vw - var(--content-max))/2)); }
+.main-content { width: min(var(--content-max), 100%); padding-left: clamp(14px, 2.2vw, 30px); padding-right: clamp(14px, 2.2vw, 30px); }
+.stats-grid { gap: clamp(10px, 1.2vw, 16px); }
+.stat-card { min-width: 0; }
+.workspace-grid { grid-template-columns: minmax(0, 1.35fr) minmax(300px, .8fr); gap: clamp(12px, 1.4vw, 20px); }
+.panel { min-width: 0; }
+.parcel-row { grid-template-columns: minmax(145px, 1.25fr) minmax(100px, .9fr) repeat(4, minmax(90px, .78fr)) minmax(110px, .9fr); gap: 9px; }
+.parcel-row > * { min-width: 0; }
+.parcel-main strong, .parcel-row .status-cell strong { overflow-wrap: anywhere; }
+.parcel-row:not(.header-row) { transition: border-color .15s, box-shadow .15s, transform .15s; }
+.parcel-row:not(.header-row):hover { border-color: #d6e1f3; box-shadow: 0 5px 16px rgba(18,34,63,.045); }
+.filter-row input, .filter-row select, .upload-controls input, .button { min-height: 44px; }
+.upload-controls input[type="file"] { min-width: 0; }
+
+@media (min-width: 1500px) {
+  .main-content { padding-top: 34px; }
+  .panel { padding: 22px; }
+  .stat-card { padding: 20px; }
+  .stat-card strong { font-size: 32px; }
+}
+
+@media (max-width: 1120px) {
+  .workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(260px, .85fr); }
+  .parcel-row { grid-template-columns: minmax(130px, 1.15fr) minmax(90px, .85fr) repeat(4, minmax(78px, .75fr)) minmax(100px, .85fr); gap: 7px; padding-left: 9px; padding-right: 9px; }
+  .parcel-row.header-row { font-size: 8px; letter-spacing: .025em; }
+}
+
+@media (max-width: 900px) {
+  .workspace-grid { grid-template-columns: 1fr; }
+  .activity-panel { min-height: 0; }
+  .workflow-note { margin-top: 16px; }
+  .parcel-row.header-row { display: none; }
+  .parcel-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; padding: 15px; }
+  .parcel-row .parcel-main { grid-column: 1 / -1; padding-bottom: 10px; border-bottom: 1px solid #edf0f5; }
+  .parcel-row .mobile-label { display: block; margin-bottom: 5px; color: #8b98aa; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+  .parcel-row .status-cell { min-width: 0; }
+  .parcel-row .status-cell strong { display: block; font-size: 11px; }
+  .parcel-row .status-time { font-size: 10px; }
+  .parcel-row .overall-status { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid #edf0f5; }
+  .filter-row { align-items: stretch; }
+  .filter-row select { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .topbar { min-height: 58px; padding: 8px 12px; gap: 8px; }
+  .brand-inline { min-width: 0; gap: 8px; }
+  .brand-mark.small { width: 34px; height: 34px; border-radius: 10px; }
+  .brand-inline strong { font-size: 11px; }
+  .brand-inline small { font-size: 8px; }
+  .top-actions { flex-shrink: 0; gap: 5px; }
+  .role-pill { padding: 6px 7px; font-size: 8px; }
+  .top-actions .button { min-height: 34px; padding: 0 9px; font-size: 10px; }
+  .main-content { padding: 17px 11px calc(18px + env(safe-area-inset-bottom)); }
+  .welcome-row { align-items: flex-start; gap: 9px; margin-bottom: 16px; }
+  .welcome-row > div { min-width: 0; }
+  .welcome-row h1 { font-size: clamp(21px, 6vw, 25px); line-height: 1.15; }
+  .welcome-row p:last-child { max-width: 245px; font-size: 11px; line-height: 1.45; }
+  .welcome-row .button { min-height: 36px; flex-shrink: 0; padding: 0 9px; font-size: 10px; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat-card { min-height: 94px; padding: 12px; border-radius: 12px; }
+  .stat-card strong { margin: 8px 0 3px; font-size: clamp(22px, 6vw, 26px); }
+  .stat-label { font-size: 10px; line-height: 1.3; }
+  .stat-hint { font-size: 9px; line-height: 1.35; }
+  .panel { padding: 13px; border-radius: 13px; }
+  .panel-heading { gap: 8px; }
+  .panel-heading h2 { font-size: 16px; }
+  .section-kicker { font-size: 9px; }
+  .camera-frame { min-height: 190px; margin: 12px 0 10px; }
+  .reader-box, #reader__scan_region { min-height: 190px; }
+  .reader-box video { max-height: 270px; }
+  .manual-entry { margin-top: 14px; padding-top: 14px; }
+  .manual-row { flex-direction: column; }
+  .manual-row .button { width: 100%; }
+  .filter-row { flex-direction: column; gap: 8px; margin: 13px 0 10px; }
+  .filter-row input, .filter-row select { min-height: 44px; font-size: 13px; }
+  .parcel-list { gap: 9px; }
+  .parcel-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px 9px; padding: 12px; border-radius: 12px; }
+  .parcel-row .parcel-main { padding-bottom: 9px; }
+  .parcel-main strong { font-size: 12px; line-height: 1.4; }
+  .parcel-main small { font-size: 9px; }
+  .parcel-row .mobile-label { margin-bottom: 4px; font-size: 8px; }
+  .parcel-row .status-cell strong { font-size: 10px; line-height: 1.35; }
+  .status-pill { padding: 5px 7px; font-size: 8px; }
+  .status-time { font-size: 9px; }
+  .record-count { white-space: normal; text-align: right; font-size: 9px; }
+  .parcel-heading { align-items: flex-start; }
+  .list-footer { gap: 8px; align-items: center; font-size: 9px; }
+  .upload-instructions { padding: 12px; font-size: 11px; }
+  .upload-controls { align-items: stretch; flex-direction: column; }
+  .upload-controls input[type="file"] { width: 100%; min-height: 48px; font-size: 11px; }
+  .upload-controls .button { width: 100%; }
+  .login-card { padding: 22px 19px; }
+}
+
+@media (max-width: 360px) {
+  .brand-inline small { display: none; }
+  .role-pill { max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
+  .welcome-row { flex-direction: column; }
+  .welcome-row .button { align-self: flex-start; }
+  .stat-card { padding: 10px; }
+  .parcel-row { gap: 10px 7px; padding: 10px; }
+}

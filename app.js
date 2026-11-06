@@ -13,7 +13,11 @@
     scanner: null,
     scannerRunning: false,
     scanBusy: false,
-    lastScan: null
+    lastScan: null,
+    lastDecodedText: "",
+    lastDecodedAt: 0,
+    processedScans: new Set(),
+    audioContext: null
   };
 
   const API_URL = (window.PARCEL_CONFIG && window.PARCEL_CONFIG.API_URL || "").trim();
@@ -88,6 +92,9 @@
     state.role = "";
     state.parcels = [];
     state.lastScan = null;
+    state.lastDecodedText = "";
+    state.lastDecodedAt = 0;
+    state.processedScans.clear();
     $("appView").classList.add("hidden");
     $("loginView").classList.remove("hidden");
     $("userCode").value = "";
@@ -229,6 +236,7 @@
     try {
       showNotice("scanMessage", "Requesting camera access…", "info");
       $("cameraPlaceholder").classList.remove("hidden");
+      prepareScanAudio();
 
       // Html5Qrcode.start calls getUserMedia from this user-click flow.
       // Chrome shows its permission prompt if permission has not already been decided.
@@ -258,7 +266,7 @@
       $("cameraPlaceholder").classList.add("hidden");
       $("startCameraButton").classList.add("hidden");
       $("stopCameraButton").classList.remove("hidden");
-      showNotice("scanMessage", "Camera ready. Point it at a parcel barcode.", "success");
+      showNotice("scanMessage", "Camera ready. Scan parcels one after another; the camera will stay on.", "success");
 
     } catch (err) {
       console.error("Camera start failed:", err);
@@ -303,11 +311,23 @@
   }
 
   async function onBarcodeDetected(decodedText) {
-    if (state.scanBusy) return;
+    const tracking = String(decodedText || "").trim();
+    if (!tracking || state.scanBusy || state.processedScans.has(tracking)) return;
+
+    // Barcode libraries can decode the same label many times per second.
+    // Ignore repeat callbacks briefly while the first request is being handled.
+    const now = Date.now();
+    if (tracking === state.lastDecodedText && now - state.lastDecodedAt < 2500) return;
+    state.lastDecodedText = tracking;
+    state.lastDecodedAt = now;
+
     state.scanBusy = true;
-    await stopCamera();
-    await submitScan(decodedText);
-    state.scanBusy = false;
+    try {
+      const accepted = await submitScan(tracking);
+      if (accepted) state.processedScans.add(tracking);
+    } finally {
+      state.scanBusy = false;
+    }
   }
 
   async function manualScan() {
@@ -318,8 +338,12 @@
     }
     if (state.scanBusy) return;
     state.scanBusy = true;
-    await submitScan(tracking);
-    state.scanBusy = false;
+    try {
+      const accepted = await submitScan(tracking);
+      if (accepted) state.processedScans.add(tracking);
+    } finally {
+      state.scanBusy = false;
+    }
   }
 
   async function submitScan(trackingNumber) {
@@ -336,16 +360,65 @@
       state.lastScan = result;
       showLastScan(result);
       $("manualTracking").value = "";
-      showNotice("scanMessage", "Scan accepted: " + result.tracking + " marked " + result.checkpoint + ".", "success");
+      showNotice("scanMessage", "✓ Scan accepted: " + result.tracking + " marked " + result.checkpoint + ". Camera is still active.", "success");
+      playScanFeedback(true);
       await loadParcels();
-      if (state.scannerRunning) await stopCamera();
+      return true;
 
     } catch (err) {
-      showNotice("scanMessage", err.message, "error");
+      showNotice("scanMessage", "Scan not accepted: " + err.message, "error");
+      playScanFeedback(false);
+      return false;
     } finally {
       $("manualScanButton").disabled = false;
-      $("manualTracking").focus();
+      if (!state.scannerRunning) $("manualTracking").focus();
     }
+  }
+
+  // Prepare audio while the user is pressing Start Camera. This helps Chrome
+  // allow a short beep later, when a barcode is decoded asynchronously.
+  function prepareScanAudio() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      if (!state.audioContext) state.audioContext = new AudioContextClass();
+      if (state.audioContext.state === "suspended") state.audioContext.resume().catch(() => {});
+    } catch (err) {
+      console.warn("Audio feedback is unavailable:", err);
+    }
+  }
+
+  function playBeep(success) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!state.audioContext && AudioContextClass) prepareScanAudio();
+    const context = state.audioContext;
+    if (!context) return;
+
+    try {
+      if (context.state === "suspended") context.resume().catch(() => {});
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = success ? 1150 : 360;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + (success ? 0.16 : 0.28));
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + (success ? 0.18 : 0.30));
+    } catch (err) {
+      console.warn("Beep could not play:", err);
+    }
+  }
+
+  function playScanFeedback(success) {
+    // Android Chrome supports vibration on many devices; beep is the fallback.
+    let vibrated = false;
+    if (typeof navigator.vibrate === "function") {
+      try { vibrated = navigator.vibrate(success ? [100] : [70, 60, 70]); } catch (_) {}
+    }
+    playBeep(success);
   }
 
   function showLastScan(result) {

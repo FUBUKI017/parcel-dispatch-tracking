@@ -3,5 +3,5 @@
  * Keep the URL in quotes and retain the trailing /exec.
  */
 window.PARCEL_CONFIG = {
-  API_URL: "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"
+  API_URL: "https://script.google.com/macros/s/AKfycbwI0wF9qN1cYcJKgdjTIUVl495kQ-tJZZrDYgYTVuMCLGVBiIkg-QSV2xYXjjVGr5w/exec"
 };

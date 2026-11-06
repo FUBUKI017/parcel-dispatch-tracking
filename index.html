@@ -7,6 +7,7 @@
   <title>Parcel Dispatch</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
   <script defer src="app.js"></script>
 </head>
@@ -23,7 +24,7 @@
     <section class="login-card">
       <div class="section-kicker">TEAM ACCESS</div>
       <h2>Sign in to continue</h2>
-      <p class="muted">Enter the access code assigned to your checkpoint.</p>
+      <p class="muted">Enter the access code assigned to your role.</p>
       <form id="loginForm">
         <label for="userCode">User code</label>
         <input id="userCode" name="userCode" type="password" autocomplete="current-password"
@@ -32,7 +33,7 @@
       </form>
       <div id="loginMessage" class="notice hidden" role="status"></div>
     </section>
-    <p class="login-foot">Authorized warehouse and guard house personnel only.</p>
+    <p class="login-foot">Authorized warehouse, guard house, and backend personnel only.</p>
   </div>
 
   <div id="appView" class="app-shell hidden">
@@ -82,7 +83,7 @@
         </article>
       </section>
 
-      <section class="workspace-grid">
+      <section id="workspaceGrid" class="workspace-grid">
         <article class="panel scanner-panel">
           <div class="panel-heading">
             <div>
@@ -150,6 +151,27 @@
             <p class="muted tiny">Guard House scans are accepted only after Warehouse Out is recorded.</p>
           </div>
         </article>
+      </section>
+
+
+      <section id="backendUploadPanel" class="panel upload-panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">BACKEND TOOLS</p>
+            <h2>Upload parcel list</h2>
+            <p class="muted small-copy">Import tracking numbers and order numbers from an Excel workbook (.xlsx or .xls).</p>
+          </div>
+        </div>
+        <div class="upload-instructions">
+          <strong>Excel columns required</strong>
+          <p>Use column headings <b>Tracking Number</b> and <b>Order Number</b>. The first worksheet in the file will be used.</p>
+          <p>Existing tracking numbers will be skipped. Uploading will not overwrite checkpoint scans or existing order details.</p>
+        </div>
+        <div class="upload-controls">
+          <input id="excelFile" type="file" accept=".xlsx,.xls" aria-label="Choose Excel file">
+          <button id="uploadExcelButton" class="button button-primary" type="button">Upload Excel file</button>
+        </div>
+        <div id="uploadMessage" class="notice hidden" role="status" aria-live="polite"></div>
       </section>
 
       <section class="panel parcels-panel">

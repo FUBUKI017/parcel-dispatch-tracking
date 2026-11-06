@@ -215,3 +215,13 @@ input:focus, select:focus { border-color: #7c9af0; box-shadow: 0 0 0 3px rgba(53
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+
+/* Backend-only Excel import panel */
+.upload-panel { margin-bottom: 20px; }
+.upload-instructions { padding: 14px 16px; margin: 12px 0 15px; border: 1px solid #e4eaf3; border-radius: 12px; background: #f7f9fc; color: #56647a; font-size: 12px; line-height: 1.6; }
+.upload-instructions strong { display: block; margin-bottom: 4px; color: #26344c; }
+.upload-instructions p { margin: 3px 0; }
+.upload-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.upload-controls input[type="file"] { flex: 1; min-width: 220px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 12px; }
+@media (max-width: 600px) { .upload-controls { align-items: stretch; flex-direction: column; } .upload-controls .button { width: 100%; } }

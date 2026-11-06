@@ -47,6 +47,7 @@
       state.visibleCount += 40;
       renderParcels();
     });
+    $("uploadExcelButton").addEventListener("click", uploadExcelFile);
 
     $("todayLabel").textContent = new Intl.DateTimeFormat("en-PH", {
       weekday: "long", month: "long", day: "numeric"
@@ -71,11 +72,16 @@
         state.userName = result.name || "";
         $("loginView").classList.add("hidden");
         $("appView").classList.remove("hidden");
-        $("rolePill").textContent = state.role === "WAREHOUSE" ? "WAREHOUSE" : "GUARD HOUSE";
-        $("dashboardTitle").textContent = state.role === "WAREHOUSE" ? "Warehouse dashboard" : "Guard house dashboard";
-        $("dashboardSubtitle").textContent = state.role === "WAREHOUSE"
-          ? "Scan parcels as they leave the warehouse."
-          : "Verify parcels as they pass the guard house.";
+        const isBackend = state.role === "BACKEND";
+        $("rolePill").textContent = isBackend ? "BACKEND" : state.role === "WAREHOUSE" ? "WAREHOUSE" : "GUARD HOUSE";
+        $("dashboardTitle").textContent = isBackend ? "Backend dashboard" : state.role === "WAREHOUSE" ? "Warehouse dashboard" : "Guard house dashboard";
+        $("dashboardSubtitle").textContent = isBackend
+          ? "View dispatch progress and upload parcel tracking lists."
+          : state.role === "WAREHOUSE"
+            ? "Scan parcels as they leave the warehouse."
+            : "Verify parcels as they pass the guard house.";
+        $("workspaceGrid").classList.toggle("hidden", isBackend);
+        $("backendUploadPanel").classList.toggle("hidden", !isBackend);
         $("scannerTitle").textContent = state.role === "WAREHOUSE" ? "Warehouse Out scanner" : "Guard House Out scanner";
         $("scannerDescription").textContent = state.role === "WAREHOUSE"
           ? "Scan the parcel barcode when it leaves the warehouse."
@@ -92,6 +98,7 @@
     const oldToken = state.token;
     state.token = "";
     state.role = "";
+    state.userName = "";
     state.parcels = [];
     state.lastScan = null;
     state.lastDecodedText = "";
@@ -116,6 +123,59 @@
     } catch (err) {
       showNotice("scanMessage", err.message, "error");
       $("parcelList").innerHTML = '<div class="empty-state">Unable to load parcel records. Try Refresh.</div>';
+    }
+  }
+
+  async function uploadExcelFile() {
+    if (state.role !== "BACKEND") {
+      showNotice("uploadMessage", "This function is only available to BACKEND users.", "error");
+      return;
+    }
+    const file = $("excelFile").files[0];
+    if (!file) {
+      showNotice("uploadMessage", "Choose an Excel file first.", "error");
+      return;
+    }
+    if (typeof XLSX === "undefined") {
+      showNotice("uploadMessage", "The Excel reader could not load. Check your internet connection and reload.", "error");
+      return;
+    }
+
+    setButtonBusy("uploadExcelButton", true, "Upload Excel file");
+    showNotice("uploadMessage", "Reading Excel file…", "info");
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", raw: false });
+      if (!workbook.SheetNames.length) throw new Error("The Excel file has no worksheets.");
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+      if (!matrix.length) throw new Error("The first worksheet is empty.");
+
+      const normalize = value => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const header = matrix[0].map(normalize);
+      const trackingIndex = header.findIndex(v => ["trackingnumber", "trackingno", "tracking", "waybillnumber", "waybill"].includes(v));
+      const orderIndex = header.findIndex(v => ["ordernumber", "orderno", "order", "ordernum"].includes(v));
+      if (trackingIndex < 0 || orderIndex < 0) {
+        throw new Error("Could not find both required headings. Use 'Tracking Number' and 'Order Number' in the first row.");
+      }
+
+      const rows = matrix.slice(1).map(row => ({
+        tracking: String(row[trackingIndex] == null ? "" : row[trackingIndex]).trim(),
+        order: String(row[orderIndex] == null ? "" : row[orderIndex]).trim()
+      })).filter(row => row.tracking || row.order);
+      if (!rows.length) throw new Error("No parcel rows were found below the headings.");
+      if (rows.length > 3000) throw new Error("This file contains " + rows.length.toLocaleString() + " rows. Please split it into files of 3,000 rows or fewer.");
+
+      showNotice("uploadMessage", "Uploading " + rows.length.toLocaleString() + " parcel rows…", "info");
+      const result = await api("uploadParcels", { token: state.token, rowsJson: JSON.stringify(rows) });
+      if (!result.success) throw new Error(result.error || "Upload failed.");
+      showNotice("uploadMessage", "Upload complete. Added " + result.added.toLocaleString() + " new parcels; skipped " + result.skipped.toLocaleString() + " duplicate or incomplete rows.", "success");
+      $("excelFile").value = "";
+      await loadParcels();
+    } catch (err) {
+      showNotice("uploadMessage", err.message || "Could not process this Excel file.", "error");
+    } finally {
+      setButtonBusy("uploadExcelButton", false, "Upload Excel file");
     }
   }
 

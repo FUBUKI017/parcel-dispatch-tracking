@@ -17,7 +17,8 @@
     lastDecodedText: "",
     lastDecodedAt: 0,
     processedScans: new Set(),
-    audioContext: null
+    audioContext: null,
+    scannerRecoveryPromise: null
   };
 
   const API_URL = (window.PARCEL_CONFIG && window.PARCEL_CONFIG.API_URL || "").trim();
@@ -240,27 +241,8 @@
 
       // Html5Qrcode.start calls getUserMedia from this user-click flow.
       // Chrome shows its permission prompt if permission has not already been decided.
-      state.scanner = new Html5Qrcode("reader", {
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.ITF,
-          Html5QrcodeSupportedFormats.CODABAR,
-          Html5QrcodeSupportedFormats.QR_CODE
-        ],
-        verbose: false
-      });
-
-      await state.scanner.start(
-        { facingMode: "environment" },
-        { fps: 12, qrbox: { width: 280, height: 135 }, aspectRatio: 1.8 },
-        (decodedText) => onBarcodeDetected(decodedText),
-        () => {}
-      );
+      state.scanner = createScanner();
+      await startScannerEngine(state.scanner);
 
       state.scannerRunning = true;
       $("cameraPlaceholder").classList.add("hidden");
@@ -276,6 +258,75 @@
         try { await state.scanner.clear(); } catch (_) {}
         state.scanner = null;
       }
+    }
+  }
+
+  function createScanner() {
+    return new Html5Qrcode("reader", {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ],
+      verbose: false
+    });
+  }
+
+  function startScannerEngine(scanner) {
+    return scanner.start(
+      { facingMode: "environment" },
+      { fps: 12, qrbox: { width: 280, height: 135 }, aspectRatio: 1.8 },
+      (decodedText) => onBarcodeDetected(decodedText),
+      () => {}
+    );
+  }
+
+  // Some mobile browsers or scanner-library states can leave the video stopped
+  // after a decode. Check the engine after processing and recover automatically.
+  async function ensureScannerActive() {
+    if (!state.scannerRunning || !state.scanner) return;
+    if (state.scannerRecoveryPromise) return state.scannerRecoveryPromise;
+
+    state.scannerRecoveryPromise = (async () => {
+      try {
+        const current = state.scanner;
+        const scannerState = current.getState();
+        // html5-qrcode: 1 = PAUSED, 2 = SCANNING.
+        if (scannerState === 2) return;
+        if (scannerState === 1 && typeof current.resume === "function") {
+          await current.resume();
+          return;
+        }
+
+        try { await current.stop(); } catch (_) {}
+        try { await current.clear(); } catch (_) {}
+        if (!state.scannerRunning) return;
+
+        const replacement = createScanner();
+        state.scanner = replacement;
+        await startScannerEngine(replacement);
+        if (!state.scannerRunning) {
+          try { await replacement.stop(); } catch (_) {}
+          try { await replacement.clear(); } catch (_) {}
+          return;
+        }
+        showNotice("scanMessage", "Scanner is active and ready for the next parcel.", "success");
+      } catch (err) {
+        console.warn("Automatic scanner recovery failed:", err);
+        showNotice("scanMessage", "The camera paused. Tap Start Camera to resume. " + (err && err.message ? err.message : ""), "error");
+      }
+    })();
+
+    try {
+      await state.scannerRecoveryPromise;
+    } finally {
+      state.scannerRecoveryPromise = null;
     }
   }
 
@@ -327,6 +378,7 @@
       if (accepted) state.processedScans.add(tracking);
     } finally {
       state.scanBusy = false;
+      await ensureScannerActive();
     }
   }
 
@@ -343,6 +395,7 @@
       if (accepted) state.processedScans.add(tracking);
     } finally {
       state.scanBusy = false;
+      await ensureScannerActive();
     }
   }
 

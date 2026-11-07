@@ -148,11 +148,26 @@
             <strong>Dispatch sequence</strong>
             <div class="workflow-step"><span class="step-number">1</span><span>Warehouse Out</span><span class="step-arrow">→</span></div>
             <div class="workflow-step"><span class="step-number">2</span><span>Guard House Out</span><span class="step-arrow">✓</span></div>
-            <p class="muted tiny">Guard House scans are accepted only after Warehouse Out is recorded.</p>
+            <p class="muted tiny">Guard House scans are accepted only after the warehouse signs and forwards the batch.</p>
           </div>
         </article>
       </section>
 
+
+      <section id="handoverPanel" class="panel handover-panel hidden">
+        <div class="panel-heading"><div><p class="section-kicker">SIGNED HANDOVER</p><h2 id="handoverTitle">Confirm dispatch</h2>
+        <p class="muted small-copy" id="handoverHint"></p></div></div>
+        <div id="batchPickerWrap" class="hidden"><label for="batchPicker">Select forwarded batch</label>
+          <select id="batchPicker"></select></div>
+        <p id="handoverCount" class="handover-count"></p>
+        <label for="signaturePad">Signature (draw with finger, mouse, or stylus)</label>
+        <canvas id="signaturePad" width="720" height="220" aria-label="Signature pad"></canvas>
+        <div class="handover-actions">
+          <button id="clearSignature" class="button button-outline" type="button">Clear signature</button>
+          <button id="confirmHandover" class="button button-primary" type="button">Confirm signed handover</button>
+        </div>
+        <div id="handoverMessage" class="notice hidden" role="status" aria-live="polite"></div>
+      </section>
 
       <section id="backendUploadPanel" class="panel upload-panel hidden">
         <div class="panel-heading">

@@ -389,3 +389,12 @@ button, input, select { touch-action: manipulation; }
 @media (max-width: 900px) {
   .parcel-row .order-cell strong { display:block; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.55; }
 }
+
+/* Signed handover: responsive finger/mouse signature capture */
+.handover-panel { margin-bottom: 20px; }
+.handover-panel label { display:block; font-weight:650; margin: 12px 0 8px; }
+#signaturePad { display:block; width:100%; max-width:760px; height:auto; aspect-ratio:36 / 11; border:2px dashed #a9b9d0; border-radius:12px; background:#fff; touch-action:none; cursor:crosshair; }
+.handover-actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+.handover-count { font-weight:650; margin:14px 0; }
+#batchPicker { width:100%; max-width:620px; padding:12px; border-radius:10px; border:1px solid #cdd6e5; }
+@media(max-width:640px) { .handover-actions .button { flex:1 1 100%; } }

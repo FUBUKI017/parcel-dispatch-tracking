@@ -9,6 +9,8 @@
     token: "",
     role: "",
     parcels: [],
+    batches: [],
+    signatureDrawn: false,
     visibleCount: 40,
     scanner: null,
     scannerRunning: false,
@@ -48,6 +50,10 @@
       renderParcels();
     });
     $("uploadExcelButton").addEventListener("click", uploadExcelFile);
+    $("clearSignature").addEventListener("click", clearSignature);
+    $("confirmHandover").addEventListener("click", confirmHandover);
+    $("batchPicker").addEventListener("change", renderHandover);
+    setupSignaturePad();
 
     $("todayLabel").textContent = new Intl.DateTimeFormat("en-PH", {
       weekday: "long", month: "long", day: "numeric"
@@ -82,6 +88,11 @@
             : "Verify parcels as they pass the guard house.";
         $("workspaceGrid").classList.toggle("hidden", isBackend);
         $("backendUploadPanel").classList.toggle("hidden", !isBackend);
+        $("handoverPanel").classList.toggle("hidden", isBackend);
+        $("handoverTitle").textContent = state.role === "WAREHOUSE" ? "Sign and forward scanned parcels" : "Sign completed guard handover";
+        $("handoverHint").textContent = state.role === "WAREHOUSE" ? "Your signature releases all warehouse-scanned parcels not yet forwarded to the guard." : "Select a forwarded batch. All its parcels must be guard-scanned before you can sign and send the PDF report.";
+        $("batchPickerWrap").classList.toggle("hidden", state.role !== "GUARDHOUSE");
+        clearSignature();
         $("scannerTitle").textContent = state.role === "WAREHOUSE" ? "Warehouse Out scanner" : "Guard House Out scanner";
         $("scannerDescription").textContent = state.role === "WAREHOUSE"
           ? "Scan the parcel barcode when it leaves the warehouse."
@@ -100,6 +111,7 @@
     state.role = "";
     state.userName = "";
     state.parcels = [];
+    state.batches = [];
     state.lastScan = null;
     state.lastDecodedText = "";
     state.lastDecodedAt = 0;
@@ -118,12 +130,82 @@
       const result = await api("getParcels", { token: state.token });
       if (!result.success) throw new Error(result.error || "Could not load parcels.");
       state.parcels = result.parcels || [];
+      state.batches = result.batches || [];
+      renderHandover();
       updateStats();
       renderParcels();
     } catch (err) {
       showNotice("scanMessage", err.message, "error");
       $("parcelList").innerHTML = '<div class="empty-state">Unable to load parcel records. Try Refresh.</div>';
     }
+  }
+
+  function setupSignaturePad() {
+    const canvas = $("signaturePad"), ctx = canvas.getContext("2d");
+    let drawing = false;
+    const point = e => { const r = canvas.getBoundingClientRect(); return {
+      x: (e.clientX-r.left)*canvas.width/r.width,
+      y: (e.clientY-r.top)*canvas.height/r.height
+    }; };
+    canvas.addEventListener("pointerdown", e => {
+      e.preventDefault(); drawing = true; canvas.setPointerCapture(e.pointerId);
+      const p = point(e); ctx.beginPath(); ctx.moveTo(p.x,p.y);
+    });
+    canvas.addEventListener("pointermove", e => {
+      if (!drawing) return;
+      e.preventDefault(); const p = point(e);
+      ctx.strokeStyle = "#172b4d"; ctx.lineWidth = 3.5; ctx.lineCap = "round";
+      ctx.lineJoin = "round"; ctx.lineTo(p.x,p.y); ctx.stroke();
+      state.signatureDrawn = true;
+    });
+    ["pointerup","pointercancel","lostpointercapture"].forEach(t => canvas.addEventListener(t,()=>{drawing=false;}));
+  }
+  function clearSignature() {
+    const canvas=$("signaturePad");
+    canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);
+    state.signatureDrawn=false;
+  }
+  function renderHandover() {
+    if (state.role === "WAREHOUSE") {
+      const count=state.parcels.filter(p=>p.warehouse && !p.batchId).length;
+      $("handoverCount").textContent=count+" scanned parcel(s) awaiting warehouse signature and forwarding";
+      $("confirmHandover").disabled=!count;
+    } else if (state.role === "GUARDHOUSE") {
+      const picker=$("batchPicker"), selected=picker.value;
+      const open=state.batches.filter(b=>!b.guardAt);
+      picker.replaceChildren();
+      open.forEach(b=>{const option=document.createElement("option");option.value=b.id;
+        option.textContent=b.id+" ("+b.count+" parcels)";picker.appendChild(option);});
+      if(open.some(b=>b.id===selected)) picker.value=selected;
+      const id=picker.value, parcels=state.parcels.filter(p=>p.batchId===id);
+      const remaining=parcels.filter(p=>!p.guardhouse).length;
+      $("handoverCount").textContent=!open.length ? "No batches awaiting guard confirmation" :
+        parcels.length+" forwarded parcels · "+remaining+" still need guard scanning";
+      $("confirmHandover").disabled=!id || remaining!==0 || !parcels.length;
+    }
+  }
+  async function confirmHandover() {
+    if (!state.signatureDrawn) {showNotice("handoverMessage","Draw your signature before confirming.","error");return;}
+    const warehouse=state.role==="WAREHOUSE";
+    const batchId=warehouse?"":$("batchPicker").value;
+    const count=warehouse?state.parcels.filter(p=>p.warehouse&&!p.batchId).length:
+      state.parcels.filter(p=>p.batchId===batchId).length;
+    if (!count) return;
+    const question=warehouse ? "Forward "+count+" scanned parcels to Guard House with your signature?" :
+      "Confirm "+count+" guard-scanned parcels and email the signed PDF to all active recipients?";
+    if (!window.confirm(question)) return;
+    setButtonBusy("confirmHandover",true,"Confirm signed handover");
+    showNotice("handoverMessage","Saving signed handover…","info");
+    try {
+      const result=await api(warehouse?"confirmWarehouse":"confirmGuard",{
+        token:state.token,batchId:batchId,signature:$("signaturePad").toDataURL("image/png")
+      });
+      if(!result.success) throw new Error(result.error||"Confirmation failed");
+      showNotice("handoverMessage",warehouse ? "Batch "+result.batchId+" forwarded: "+result.count+" parcels." :
+        "Batch "+result.batchId+" confirmed. PDF emailed to "+result.emailed+" recipient(s). "+(result.notice||""),"success");
+      clearSignature(); await loadParcels();
+    } catch(err) {showNotice("handoverMessage",err.message,"error");}
+    finally {setButtonBusy("confirmHandover",false,"Confirm signed handover");renderHandover();}
   }
 
   async function uploadExcelFile() {
@@ -609,7 +691,7 @@
   }
 
   function pollResult(requestId, attempt) {
-    if (attempt > 40) {
+    if (attempt > 160) {
       return Promise.reject(new Error("The server did not respond in time. Check the Apps Script deployment and try again."));
     }
 

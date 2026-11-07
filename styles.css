@@ -332,3 +332,25 @@ button, input, select { touch-action: manipulation; }
   .stat-card { padding: 10px; }
   .parcel-row { gap: 10px 7px; padding: 10px; }
 }
+
+/* Desktop parcel register: seven columns match the seven data cells.
+   Hide mobile-only labels so they cannot collide with the values. */
+.parcel-row .mobile-label { display: none; }
+.parcel-row {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, .95fr)
+    minmax(0, 1.15fr) minmax(0, .95fr) minmax(0, 1.15fr) minmax(0, .85fr);
+  column-gap: clamp(10px, 1.25vw, 22px);
+  align-items: center;
+}
+.parcel-row > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.parcel-row .status-cell strong { display: block; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.parcel-row .status-pill { max-width: 100%; }
+.parcel-row.header-row { line-height: 1.4; }
+@media (min-width: 901px) {
+  .parcel-row { padding: 14px clamp(12px, 1.2vw, 20px); }
+  .parcel-row.header-row { padding-top: 10px; padding-bottom: 10px; }
+}
+@media (max-width: 900px) {
+  .parcel-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .parcel-row .mobile-label { display: block; }
+}

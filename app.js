@@ -218,7 +218,7 @@
 
     const header = document.createElement("div");
     header.className = "parcel-row header-row";
-    ["Parcel / tracking number", "Order number", "Warehouse out", "Guard house out", "Dispatch status"].forEach(t => {
+    ["Parcel / tracking number", "Order number", "Warehouse out", "Warehouse scanned by", "Guard house out", "Guard scanned by", "Dispatch status"].forEach(t => {
       const el = document.createElement("div");
       el.textContent = t;
       header.appendChild(el);

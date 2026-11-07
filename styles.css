@@ -398,3 +398,14 @@ button, input, select { touch-action: manipulation; }
 .handover-count { font-weight:650; margin:14px 0; }
 #batchPicker { width:100%; max-width:620px; padding:12px; border-radius:10px; border:1px solid #cdd6e5; }
 @media(max-width:640px) { .handover-actions .button { flex:1 1 100%; } }
+
+/* Visible warehouse forwarding control above the scanner */
+.forward-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;margin:0 0 18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px}
+.forward-banner-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.forward-banner-copy strong{font-size:16px;color:#17365c}
+.forward-banner-copy span{font-size:13px;line-height:1.5;color:#425a78}
+.forward-banner .button{flex-shrink:0;min-height:44px;white-space:normal}
+.handover-panel{scroll-margin-top:20px}
+#signaturePad{touch-action:none;display:block;width:100%;height:auto;max-width:720px;background:#fff;border:2px dashed #a8b9d2;border-radius:12px;cursor:crosshair}
+#signaturePad.signature-attention{outline:4px solid #93c5fd;outline-offset:3px}
+@media(max-width:700px){.forward-banner{flex-direction:column;align-items:stretch;padding:15px}.forward-banner .button{width:100%}}

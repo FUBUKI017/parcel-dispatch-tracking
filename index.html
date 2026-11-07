@@ -83,6 +83,11 @@
         </article>
       </section>
 
+      <div id="warehouseForwardBanner" class="forward-banner hidden">
+        <div class="forward-banner-copy"><strong>Warehouse dispatch submission</strong>
+        <span id="warehouseForwardStatus">Scan parcels, then sign to forward them to Guard House.</span></div>
+        <button id="openWarehouseHandover" type="button" class="button button-primary">Sign &amp; Forward to Guard House</button>
+      </div>
       <section id="workspaceGrid" class="workspace-grid">
         <article class="panel scanner-panel">
           <div class="panel-heading">
@@ -164,7 +169,7 @@
         <canvas id="signaturePad" width="720" height="220" aria-label="Signature pad"></canvas>
         <div class="handover-actions">
           <button id="clearSignature" class="button button-outline" type="button">Clear signature</button>
-          <button id="confirmHandover" class="button button-primary" type="button">Confirm signed handover</button>
+          <button id="confirmHandover" class="button button-primary" type="button">Sign &amp; Forward to Guard House</button>
         </div>
         <div id="handoverMessage" class="notice hidden" role="status" aria-live="polite"></div>
       </section>

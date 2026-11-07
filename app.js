@@ -52,6 +52,11 @@
     $("uploadExcelButton").addEventListener("click", uploadExcelFile);
     $("clearSignature").addEventListener("click", clearSignature);
     $("confirmHandover").addEventListener("click", confirmHandover);
+    $("openWarehouseHandover").addEventListener("click", () => {
+      $("handoverPanel").scrollIntoView({behavior:"smooth",block:"start"});
+      $("signaturePad").classList.add("signature-attention");
+      setTimeout(() => $("signaturePad").classList.remove("signature-attention"),1800);
+    });
     $("batchPicker").addEventListener("change", renderHandover);
     setupSignaturePad();
 
@@ -89,6 +94,8 @@
         $("workspaceGrid").classList.toggle("hidden", isBackend);
         $("backendUploadPanel").classList.toggle("hidden", !isBackend);
         $("handoverPanel").classList.toggle("hidden", isBackend);
+        $("warehouseForwardBanner").classList.toggle("hidden", state.role !== "WAREHOUSE");
+        $("confirmHandover").textContent = state.role === "WAREHOUSE" ? "Sign & Forward to Guard House" : "Confirm Guard Handover & Email PDF";
         $("handoverTitle").textContent = state.role === "WAREHOUSE" ? "Sign and forward scanned parcels" : "Sign completed guard handover";
         $("handoverHint").textContent = state.role === "WAREHOUSE" ? "Your signature releases all warehouse-scanned parcels not yet forwarded to the guard." : "Select a forwarded batch. All its parcels must be guard-scanned before you can sign and send the PDF report.";
         $("batchPickerWrap").classList.toggle("hidden", state.role !== "GUARDHOUSE");
@@ -170,6 +177,10 @@
       const count=state.parcels.filter(p=>p.warehouse && !p.batchId).length;
       $("handoverCount").textContent=count+" scanned parcel(s) awaiting warehouse signature and forwarding";
       $("confirmHandover").disabled=!count;
+      $("openWarehouseHandover").disabled=!count;
+      $("warehouseForwardStatus").textContent = count
+        ? count + " scanned parcel(s) ready to forward. Tap here, sign, then confirm."
+        : "Scan parcels first. This button becomes available when a parcel is scanned.";
     } else if (state.role === "GUARDHOUSE") {
       const picker=$("batchPicker"), selected=picker.value;
       const open=state.batches.filter(b=>!b.guardAt);
@@ -205,7 +216,7 @@
         "Batch "+result.batchId+" confirmed. PDF emailed to "+result.emailed+" recipient(s). "+(result.notice||""),"success");
       clearSignature(); await loadParcels();
     } catch(err) {showNotice("handoverMessage",err.message,"error");}
-    finally {setButtonBusy("confirmHandover",false,"Confirm signed handover");renderHandover();}
+    finally {setButtonBusy("confirmHandover",false,warehouse ? "Sign & Forward to Guard House" : "Confirm Guard Handover & Email PDF");renderHandover();}
   }
 
   async function uploadExcelFile() {

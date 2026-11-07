@@ -101,10 +101,10 @@
         $("handoverHint").textContent = state.role === "WAREHOUSE" ? "Your signature releases all warehouse-scanned parcels not yet forwarded to the guard." : "Select a forwarded batch. All its parcels must be guard-scanned before you can sign and send the PDF report.";
         $("batchPickerWrap").classList.toggle("hidden", state.role !== "GUARDHOUSE");
         clearSignature();
-        $("scannerTitle").textContent = state.role === "WAREHOUSE" ? "Warehouse Out scanner" : "Guard House Out scanner";
+        $("scannerTitle").textContent = state.role === "WAREHOUSE" ? "Warehouse scanner" : "Guard House scanner";
         $("scannerDescription").textContent = state.role === "WAREHOUSE"
-          ? "Scan the parcel barcode when it leaves the warehouse."
-          : "Scan only parcels already recorded as Warehouse Out.";
+          ? "Scan parcels first. Warehouse Out is recorded only after signing and forwarding."
+          : "Scan forwarded parcels first. Guard House Out is recorded only after signing the batch.";
         $("loginMessage").classList.add("hidden");
         loadParcels();
       })
@@ -176,7 +176,7 @@
   }
   function renderHandover() {
     if (state.role === "WAREHOUSE") {
-      const count=state.parcels.filter(p=>p.warehouse && !p.batchId).length;
+      const count=state.parcels.filter(p=>p.warehouseScanned && !p.batchId).length;
       $("handoverCount").textContent=count+" scanned parcel(s) awaiting warehouse signature and forwarding";
       $("confirmHandover").disabled=!count;
       $("openWarehouseHandover").disabled=!count;
@@ -191,7 +191,7 @@
         option.textContent=b.id+" ("+b.count+" parcels)";picker.appendChild(option);});
       if(open.some(b=>b.id===selected)) picker.value=selected;
       const id=picker.value, parcels=state.parcels.filter(p=>p.batchId===id);
-      const remaining=parcels.filter(p=>!p.guardhouse).length;
+      const remaining=parcels.filter(p=>!p.guardScanned).length;
       $("handoverCount").textContent=!open.length ? "No batches awaiting guard confirmation" :
         parcels.length+" forwarded parcels · "+remaining+" still need guard scanning";
       $("confirmHandover").disabled=!id || remaining!==0 || !parcels.length;
@@ -201,7 +201,7 @@
     if (!state.signatureDrawn) {showNotice("handoverMessage","Draw your signature before confirming.","error");return;}
     const warehouse=state.role==="WAREHOUSE";
     const batchId=warehouse?"":$("batchPicker").value;
-    const count=warehouse?state.parcels.filter(p=>p.warehouse&&!p.batchId).length:
+    const count=warehouse?state.parcels.filter(p=>p.warehouseScanned&&!p.batchId).length:
       state.parcels.filter(p=>p.batchId===batchId).length;
     if (!count) return;
     const question=warehouse ? "Forward "+count+" scanned parcels to Guard House with your signature?" :
@@ -285,7 +285,7 @@
     const workload = new Set([...todays, ...backlog].map(p => p.tracking));
     const warehouse = state.parcels.filter(p => p.warehouse).length;
     const guard = state.parcels.filter(p => p.guardhouse).length;
-    const awaiting = state.parcels.filter(p => p.warehouse && !p.guardhouse).length;
+    const awaiting = state.parcels.filter(p => p.warehouse && !p.guardScanned).length;
     $("totalCount").textContent = workload.size.toLocaleString();
     $("backlogCount").textContent = backlog.length.toLocaleString();
     $("warehouseCount").textContent = warehouse.toLocaleString();
@@ -361,8 +361,16 @@
         ? '<span class="status-pill status-done">✓ COMPLETED</span>'
         : p.warehouse
           ? '<span class="status-pill status-transit">IN TRANSIT</span>'
-          : '<span class="status-pill status-pending">PENDING</span>';
+          : p.warehouseScanned
+            ? '<span class="status-pill status-transit">AWAITING WAREHOUSE SIGNATURE</span>'
+            : '<span class="status-pill status-pending">PENDING</span>';
 
+      if (p.warehouseScanned && !p.warehouse) {
+        warehouse.querySelector(".status-pill")?.replaceChildren(document.createTextNode("SCANNED · SIGN PENDING"));
+      }
+      if (p.guardScanned && !p.guardhouse) {
+        guard.querySelector(".status-pill")?.replaceChildren(document.createTextNode("SCANNED · SIGN PENDING"));
+      }
       row.append(parcel, order, warehouse, warehouseBy, guard, guardBy, overall);
       list.appendChild(row);
     });

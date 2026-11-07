@@ -409,3 +409,10 @@ button, input, select { touch-action: manipulation; }
 #signaturePad{touch-action:none;display:block;width:100%;height:auto;max-width:720px;background:#fff;border:2px dashed #a8b9d2;border-radius:12px;cursor:crosshair}
 #signaturePad.signature-attention{outline:4px solid #93c5fd;outline-offset:3px}
 @media(max-width:700px){.forward-banner{flex-direction:column;align-items:stretch;padding:15px}.forward-banner .button{width:100%}}
+
+/* Daily workload and backlog summary */
+.stats-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.stat-backlog{background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa}
+.stat-backlog strong{color:#9a3412}
+@media(max-width:1150px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

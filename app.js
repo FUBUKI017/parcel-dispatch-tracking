@@ -10,6 +10,7 @@
     role: "",
     parcels: [],
     batches: [],
+    today: "",
     signatureDrawn: false,
     visibleCount: 40,
     scanner: null,
@@ -138,6 +139,7 @@
       if (!result.success) throw new Error(result.error || "Could not load parcels.");
       state.parcels = result.parcels || [];
       state.batches = result.batches || [];
+      state.today = result.today || new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Manila"});
       renderHandover();
       updateStats();
       renderParcels();
@@ -272,12 +274,20 @@
     }
   }
 
+  function isBacklog(p) {
+    // Undated legacy records are treated as outstanding until completed.
+    return !p.guardhouse && (!p.uploadedDate || p.uploadedDate < state.today);
+  }
+
   function updateStats() {
-    const total = state.parcels.length;
+    const todays = state.parcels.filter(p => p.uploadedDate === state.today);
+    const backlog = state.parcels.filter(isBacklog);
+    const workload = new Set([...todays, ...backlog].map(p => p.tracking));
     const warehouse = state.parcels.filter(p => p.warehouse).length;
     const guard = state.parcels.filter(p => p.guardhouse).length;
     const awaiting = state.parcels.filter(p => p.warehouse && !p.guardhouse).length;
-    $("totalCount").textContent = total.toLocaleString();
+    $("totalCount").textContent = workload.size.toLocaleString();
+    $("backlogCount").textContent = backlog.length.toLocaleString();
     $("warehouseCount").textContent = warehouse.toLocaleString();
     $("guardCount").textContent = guard.toLocaleString();
     $("awaitingCount").textContent = awaiting.toLocaleString();
@@ -289,6 +299,8 @@
     return state.parcels.filter(p => {
       const matchText = !q || p.tracking.toLowerCase().includes(q) || p.order.toLowerCase().includes(q);
       let matchStatus = true;
+      if (filter === "BACKLOG") matchStatus = isBacklog(p);
+      if (filter === "TODAY") matchStatus = p.uploadedDate === state.today;
       if (filter === "PENDING") matchStatus = !p.warehouse;
       if (filter === "IN_TRANSIT") matchStatus = !!p.warehouse && !p.guardhouse;
       if (filter === "COMPLETED") matchStatus = !!p.warehouse && !!p.guardhouse;
@@ -327,7 +339,7 @@
       const tracking = document.createElement("strong");
       tracking.textContent = p.tracking;
       const trackingSub = document.createElement("small");
-      trackingSub.textContent = "TRACKING NUMBER";
+      trackingSub.textContent = p.uploadedAt ? "Uploaded: " + p.uploadedAt : "UPLOAD DATE NOT RECORDED";
       parcel.append(tracking, trackingSub);
 
       const order = document.createElement("div");

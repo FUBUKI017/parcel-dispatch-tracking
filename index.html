@@ -62,9 +62,9 @@
 
       <section class="stats-grid" aria-label="Parcel summary">
         <article class="stat-card">
-          <span class="stat-label">Total parcels</span>
+          <span class="stat-label">Total to process today</span>
           <strong id="totalCount">0</strong>
-          <span class="stat-hint">Loaded from spreadsheet</span>
+          <span class="stat-hint">Today’s uploads + outstanding backlogs</span>
         </article>
         <article class="stat-card stat-blue">
           <span class="stat-label">Warehouse out</span>
@@ -81,7 +81,12 @@
           <strong id="awaitingCount">0</strong>
           <span class="stat-hint">Warehouse scanned only</span>
         </article>
-      </section>
+              <article class="stat-card stat-backlog">
+          <span class="stat-label">Backlogs</span>
+          <strong id="backlogCount">0</strong>
+          <span class="stat-hint">Older uncompleted parcels</span>
+        </article>
+</section>
 
       <div id="warehouseForwardBanner" class="forward-banner hidden">
         <div class="forward-banner-copy"><strong>Warehouse dispatch submission</strong>
@@ -198,7 +203,7 @@
         <div class="panel-heading parcel-heading">
           <div>
             <p class="section-kicker">DISPATCH REGISTER</p>
-            <h2>All parcels</h2>
+            <h2>Parcel register</h2>
             <p class="muted small-copy">Search tracking numbers or order numbers and monitor both checkpoints.</p>
           </div>
           <span id="recordCount" class="record-count">0 records</span>
@@ -211,6 +216,8 @@
           </div>
           <select id="statusFilter" aria-label="Filter parcels by status">
             <option value="ALL">All statuses</option>
+            <option value="BACKLOG">Backlogs only</option>
+            <option value="TODAY">Uploaded today</option>
             <option value="PENDING">Pending warehouse</option>
             <option value="IN_TRANSIT">Awaiting guard</option>
             <option value="COMPLETED">Completed</option>

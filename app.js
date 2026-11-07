@@ -297,7 +297,7 @@
     const q = $("searchInput").value.trim().toLowerCase();
     const filter = $("statusFilter").value;
     return state.parcels.filter(p => {
-      const matchText = !q || p.tracking.toLowerCase().includes(q) || p.order.toLowerCase().includes(q);
+      const matchText = !q || p.tracking.toLowerCase().includes(q) || p.order.toLowerCase().includes(q) || (p.batchId || "").toLowerCase().includes(q);
       let matchStatus = true;
       if (filter === "BACKLOG") matchStatus = isBacklog(p);
       if (filter === "TODAY") matchStatus = p.uploadedDate === state.today;
@@ -323,7 +323,7 @@
 
     const header = document.createElement("div");
     header.className = "parcel-row header-row";
-    ["Parcel / tracking number", "Order number", "Warehouse out", "Warehouse scanned by", "Guard house out", "Guard scanned by", "Dispatch status"].forEach(t => {
+    ["Parcel / tracking number", "Order number", "Dispatch batch number", "Warehouse out", "Warehouse scanned by", "Guard house out", "Guard scanned by", "Dispatch status"].forEach(t => {
       const el = document.createElement("div");
       el.textContent = t;
       header.appendChild(el);
@@ -350,6 +350,17 @@
       orderText.title = p.order || "";
       order.appendChild(orderText);
 
+      const dispatchBatch = document.createElement("div");
+      dispatchBatch.className = "status-cell batch-cell";
+      const batchLabel = document.createElement("span");
+      batchLabel.className = "mobile-label";
+      batchLabel.textContent = "Dispatch batch number";
+      const batchValue = document.createElement("strong");
+      batchValue.textContent = p.batchId || "Not assigned";
+      batchValue.title = p.batchId || "Warehouse has not signed and forwarded this parcel";
+      if (!p.batchId) batchValue.className = "batch-unassigned";
+      dispatchBatch.append(batchLabel, batchValue);
+
       const warehouse = makeCheckpoint("Warehouse out", p.warehouse);
       const warehouseBy = makeScannedBy("Warehouse scanned by", p.warehouseBy);
       const guard = makeCheckpoint("Guard house out", p.guardhouse);
@@ -371,7 +382,7 @@
       if (p.guardScanned && !p.guardhouse) {
         guard.querySelector(".status-pill")?.replaceChildren(document.createTextNode("SCANNED · SIGN PENDING"));
       }
-      row.append(parcel, order, warehouse, warehouseBy, guard, guardBy, overall);
+      row.append(parcel, order, dispatchBatch, warehouse, warehouseBy, guard, guardBy, overall);
       list.appendChild(row);
     });
   }

@@ -416,3 +416,17 @@ button, input, select { touch-action: manipulation; }
 .stat-backlog strong{color:#9a3412}
 @media(max-width:1150px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Dispatch batch number: eight-column desktop register, two-column mobile cards. */
+.parcel-row .batch-cell strong { display:block; font-size:11px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; line-height:1.5; }
+.parcel-row .batch-cell .batch-unassigned { color:#8b98aa; font-weight:600; }
+@media (min-width: 1101px) {
+  .parcel-row { grid-template-columns: minmax(125px,1.1fr) minmax(160px,1.4fr) minmax(120px,1.1fr) minmax(82px,.72fr) minmax(100px,.9fr) minmax(82px,.72fr) minmax(100px,.9fr) minmax(90px,.78fr); column-gap:clamp(8px,1vw,17px); }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .parcel-row { grid-template-columns: minmax(90px,1fr) minmax(115px,1.3fr) minmax(95px,1fr) minmax(72px,.75fr) minmax(82px,.85fr) minmax(72px,.75fr) minmax(82px,.85fr) minmax(78px,.8fr); column-gap:7px; }
+}
+@media (max-width: 900px) {
+  .parcel-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .parcel-row .batch-cell .mobile-label { display:block; }
+}

@@ -238,10 +238,11 @@
       parcel.append(tracking, trackingSub);
 
       const order = document.createElement("div");
-      order.className = "status-cell";
+      order.className = "status-cell order-cell";
       order.innerHTML = '<span class="mobile-label">Order number</span>';
       const orderText = document.createElement("strong");
       orderText.textContent = p.order || "—";
+      orderText.title = p.order || "";
       order.appendChild(orderText);
 
       const warehouse = makeCheckpoint("Warehouse out", p.warehouse);

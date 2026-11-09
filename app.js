@@ -185,11 +185,23 @@
         : "Scan parcels first. This button becomes available when a parcel is scanned.";
     } else if (state.role === "GUARDHOUSE") {
       const picker=$("batchPicker"), selected=picker.value;
-      const open=state.batches.filter(b=>!b.guardAt);
+      const open=state.batches.filter(b => b && typeof b.id === "string" && b.id.trim() && !b.guardAt);
       picker.replaceChildren();
-      open.forEach(b=>{const option=document.createElement("option");option.value=b.id;
-        option.textContent=b.id+" ("+b.count+" parcels)";picker.appendChild(option);});
-      if(open.some(b=>b.id===selected)) picker.value=selected;
+      if (!open.length) {
+        const placeholder=document.createElement("option");
+        placeholder.value="";
+        placeholder.textContent="No batches awaiting confirmation";
+        picker.appendChild(placeholder);
+      }
+      open.forEach(b => {
+        const id=b.id.trim();
+        const actualCount=state.parcels.filter(p => p.batchId === id).length;
+        const option=document.createElement("option");
+        option.value=id;
+        option.textContent=id+" ("+actualCount+" parcel"+(actualCount===1?"":"s")+")";
+        picker.appendChild(option);
+      });
+      if(open.some(b=>b.id.trim()===selected)) picker.value=selected;
       const id=picker.value, parcels=state.parcels.filter(p=>p.batchId===id);
       const remaining=parcels.filter(p=>!p.guardScanned).length;
       $("handoverCount").textContent=!open.length ? "No batches awaiting guard confirmation" :

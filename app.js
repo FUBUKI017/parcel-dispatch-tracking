@@ -92,6 +92,37 @@
           : state.role === "WAREHOUSE"
             ? "Scan parcels as they leave the warehouse."
             : "Verify parcels as they pass the guard house.";
+        // Warehouse/Backend dashboard labels; Guard House labels remain unchanged.
+        const dailySummary = isBackend || state.role === "WAREHOUSE";
+        const summaryLabels = [
+          ["totalCount", "Total Parcels to be Processed Today", "Today's uploads + outstanding backlogs"],
+          ["warehouseCount", "Release From Warehouse", "Parcels signed and released today"],
+          ["guardCount", "Received By Guard", "Parcels signed and received today"],
+          ["awaitingCount", "Pending to be receive by Guard", "Released parcels awaiting guard confirmation"],
+          ["backlogCount", "Backlogs", "Older uncompleted parcels"]
+        ];
+        if (dailySummary) {
+          const cards = document.querySelectorAll(".stats-grid .stat-card");
+          summaryLabels.forEach(([id, label, hint], i) => {
+            const card = cards[i];
+            if (!card || !card.querySelector("#" + id)) return;
+            card.querySelector(".stat-label").textContent = label;
+            card.querySelector(".stat-hint").textContent = hint;
+          });
+        } else {
+          const originalLabels = [
+            ["Total to process today", "Today's uploads + outstanding backlogs"],
+            ["Warehouse out", "Signed and forwarded by warehouse"],
+            ["Guard house out", "Signed and confirmed by guard"],
+            ["Awaiting guard scan", "Forwarded but not yet guard-scanned"],
+            ["Backlogs", "Older uncompleted parcels"]
+          ];
+          document.querySelectorAll(".stats-grid .stat-card").forEach((card, i) => {
+            if (!originalLabels[i]) return;
+            card.querySelector(".stat-label").textContent = originalLabels[i][0];
+            card.querySelector(".stat-hint").textContent = originalLabels[i][1];
+          });
+        }
         $("workspaceGrid").classList.toggle("hidden", isBackend);
         $("backendUploadPanel").classList.toggle("hidden", !isBackend);
         $("handoverPanel").classList.toggle("hidden", isBackend);
@@ -295,9 +326,16 @@
     const todays = state.parcels.filter(p => p.uploadedDate === state.today);
     const backlog = state.parcels.filter(isBacklog);
     const workload = new Set([...todays, ...backlog].map(p => p.tracking));
-    const warehouse = state.parcels.filter(p => p.warehouse).length;
-    const guard = state.parcels.filter(p => p.guardhouse).length;
-    const awaiting = state.parcels.filter(p => p.warehouse && !p.guardScanned).length;
+    // For Warehouse and Backend: checkpoint totals refer to today's confirmed
+    // activity in Asia/Manila. A scan alone is not a confirmed release/receipt.
+    // Guard House keeps its existing cumulative dashboard behavior.
+    const dailySummary = state.role === "WAREHOUSE" || state.role === "BACKEND";
+    const datePart = timestamp => String(timestamp || "").slice(0, 10);
+    const warehouse = state.parcels.filter(p => p.warehouse && (!dailySummary || datePart(p.warehouse) === state.today)).length;
+    const guard = state.parcels.filter(p => p.guardhouse && (!dailySummary || datePart(p.guardhouse) === state.today)).length;
+    // Pending guard receipt means forwarded but not yet guard-confirmed;
+    // it includes parcels already scanned by guard but awaiting signature.
+    const awaiting = state.parcels.filter(p => p.warehouse && (dailySummary ? !p.guardhouse : !p.guardScanned)).length;
     $("totalCount").textContent = workload.size.toLocaleString();
     $("backlogCount").textContent = backlog.length.toLocaleString();
     $("warehouseCount").textContent = warehouse.toLocaleString();

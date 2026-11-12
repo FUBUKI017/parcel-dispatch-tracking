@@ -95,9 +95,9 @@
         // Warehouse/Backend dashboard labels; Guard House labels remain unchanged.
         const dailySummary = isBackend || state.role === "WAREHOUSE";
         const summaryLabels = [
-          ["totalCount", "Total Parcels to be Processed Today", "Today's uploads + outstanding backlogs"],
-          ["warehouseCount", "Release From Warehouse", "Parcels signed and released today"],
-          ["guardCount", "Received By Guard", "Parcels signed and received today"],
+          ["totalCount", "Total Parcels to be Processed Today", "Parcels uploaded today only; backlogs excluded"],
+          ["warehouseCount", "Release From Warehouse", "Uploaded today and signed/released today"],
+          ["guardCount", "Received By Guard", "Uploaded today, warehouse-released today, and guard-confirmed today"],
           ["awaitingCount", "Pending to be receive by Guard", "Released parcels awaiting guard confirmation"],
           ["backlogCount", "Backlogs", "Older uncompleted parcels"],
           ["todayPendingCount", "Parcels Not Yet Processed Today", "Uploaded today and not yet signed/released by Warehouse; excludes backlogs"]
@@ -327,17 +327,23 @@
   function updateStats() {
     const todays = state.parcels.filter(p => p.uploadedDate === state.today);
     const backlog = state.parcels.filter(isBacklog);
-    const workload = new Set([...todays, ...backlog].map(p => p.tracking));
-    // For Warehouse and Backend: checkpoint totals refer to today's confirmed
-    // activity in Asia/Manila. A scan alone is not a confirmed release/receipt.
-    // Guard House keeps its existing cumulative dashboard behavior.
+    // Warehouse and Backend daily KPIs only include today's uploads.
+    // Guard House retains its existing cumulative counters.
     const dailySummary = state.role === "WAREHOUSE" || state.role === "BACKEND";
     const datePart = timestamp => String(timestamp || "").slice(0, 10);
-    const warehouse = state.parcels.filter(p => p.warehouse && (!dailySummary || datePart(p.warehouse) === state.today)).length;
-    const guard = state.parcels.filter(p => p.guardhouse && (!dailySummary || datePart(p.guardhouse) === state.today)).length;
-    // Pending guard receipt means forwarded but not yet guard-confirmed;
-    // it includes parcels already scanned by guard but awaiting signature.
+    const releasedToday = p => !!p.warehouse && datePart(p.warehouse) === state.today;
+    const receivedToday = p => !!p.guardhouse && datePart(p.guardhouse) === state.today;
+    const warehouse = dailySummary
+      ? todays.filter(releasedToday).length
+      : state.parcels.filter(p => p.warehouse).length;
+    const guard = dailySummary
+      ? todays.filter(p => releasedToday(p) && receivedToday(p)).length
+      : state.parcels.filter(p => p.guardhouse).length;
+    // Preserve existing pending guard receipt and backlog logic.
     const awaiting = state.parcels.filter(p => p.warehouse && (dailySummary ? !p.guardhouse : !p.guardScanned)).length;
+    const workload = dailySummary
+      ? new Set(todays.map(p => p.tracking))
+      : new Set([...todays, ...backlog].map(p => p.tracking));
     $("totalCount").textContent = workload.size.toLocaleString();
     $("backlogCount").textContent = backlog.length.toLocaleString();
     $("warehouseCount").textContent = warehouse.toLocaleString();

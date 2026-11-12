@@ -99,10 +99,8 @@
           ["warehouseCount", "Release From Warehouse", "Parcels signed and released today"],
           ["guardCount", "Received By Guard", "Parcels signed and received today"],
           ["awaitingCount", "Pending to be receive by Guard", "Released parcels awaiting guard confirmation"],
-          ["backlogCount", "Backlogs", "Older uncompleted parcels"],
-          ["todayPendingCount", "Parcels Not Yet Processed Today", "Uploaded today and not yet signed/released by Warehouse; excludes backlogs"]
+          ["backlogCount", "Backlogs", "Older uncompleted parcels"]
         ];
-        $("todayPendingCard").classList.toggle("hidden", !dailySummary);
         if (dailySummary) {
           const cards = document.querySelectorAll(".stats-grid .stat-card");
           summaryLabels.forEach(([id, label, hint], i) => {
@@ -119,7 +117,7 @@
             ["Awaiting guard scan", "Forwarded but not yet guard-scanned"],
             ["Backlogs", "Older uncompleted parcels"]
           ];
-          document.querySelectorAll(".stats-grid .stat-card:not(#todayPendingCard)").forEach((card, i) => {
+          document.querySelectorAll(".stats-grid .stat-card").forEach((card, i) => {
             if (!originalLabels[i]) return;
             card.querySelector(".stat-label").textContent = originalLabels[i][0];
             card.querySelector(".stat-hint").textContent = originalLabels[i][1];
@@ -343,9 +341,6 @@
     $("warehouseCount").textContent = warehouse.toLocaleString();
     $("guardCount").textContent = guard.toLocaleString();
     $("awaitingCount").textContent = awaiting.toLocaleString();
-    // Today-only outstanding warehouse work: exclude all earlier uploads/backlogs.
-    const todayPending = todays.filter(p => !p.warehouse).length;
-    $("todayPendingCount").textContent = todayPending.toLocaleString();
   }
 
   function filteredParcels() {

@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#101b33">
   <title>Parcel Dispatch</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="live-queue.css">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
@@ -128,6 +129,8 @@
           </div>
           <div id="scanMessage" class="notice hidden" role="status" aria-live="polite"></div>
 
+
+          <div id="scanQueueLog" class="hidden" aria-hidden="true"></div>
           <div class="manual-entry">
             <label for="manualTracking">Manual tracking number</label>
             <div class="manual-row">
@@ -168,6 +171,19 @@
         </article>
       </section>
 
+
+      <section class="panel live-queue-panel" aria-label="Live scan queue">
+        <div class="panel-heading"><div><p class="section-kicker">LIVE SUBMISSIONS</p><h2>Live Scan Queue</h2><p class="muted small-copy">Manual and camera scans appear instantly. Saved means confirmed by Apps Script.</p></div><span class="queue-live-indicator">● Live</span></div>
+        <div class="queue-metrics">
+          <div class="queue-metric"><span>Queued</span><strong id="queueQueuedCount">0</strong></div>
+          <div class="queue-metric"><span>Processing</span><strong id="queueProcessingCount">0</strong></div>
+          <div class="queue-metric"><span>Saved</span><strong id="queueSavedCount">0</strong></div>
+          <div class="queue-metric"><span>Failed</span><strong id="queueFailedCount">0</strong></div>
+        </div>
+        <div class="queue-list-heading"><strong>Tracking numbers</strong><span>Pending: <b id="queuePendingCount">0</b></span></div>
+        <div id="liveQueueList" class="queue-list" role="log" aria-live="polite" aria-relevant="additions text"><p class="queue-empty">No scans yet. Camera and manual scans will appear here.</p></div>
+        <p class="muted tiny">The queue is stored in this browser tab only. Keep this page open until Pending reaches 0. Refreshing or signing out discards unsent scans.</p>
+      </section>
 
       <section id="handoverPanel" class="panel handover-panel hidden">
         <div class="panel-heading"><div><p class="section-kicker">SIGNED HANDOVER</p><h2 id="handoverTitle">Confirm dispatch</h2>

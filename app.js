@@ -16,6 +16,13 @@
     scanner: null,
     scannerRunning: false,
     scanBusy: false,
+    scanQueue: [],
+    queuedTracking: new Set(),
+    scanQueueGeneration: 0,
+    scanQueueProcessing: false,
+    activeScan: null,
+    scanEntries: [],
+    scanSequence: 0,
     lastScan: null,
     lastDecodedText: "",
     lastDecodedAt: 0,
@@ -92,8 +99,8 @@
           : state.role === "WAREHOUSE"
             ? "Scan parcels as they leave the warehouse."
             : "Verify parcels as they pass the guard house.";
-        // Warehouse/Backend dashboard labels; Guard House labels remain unchanged.
-        const dailySummary = isBackend || state.role === "WAREHOUSE";
+        // Apply the same today-only dashboard labels to all three roles.
+        const dailySummary = ["WAREHOUSE", "BACKEND", "GUARDHOUSE"].includes(state.role);
         const summaryLabels = [
           ["totalCount", "Total Parcels to be Processed Today", "Parcels uploaded today only; backlogs excluded"],
           ["warehouseCount", "Release From Warehouse", "Uploaded today and signed/released today"],
@@ -157,6 +164,14 @@
     state.lastDecodedText = "";
     state.lastDecodedAt = 0;
     state.processedScans.clear();
+    state.scanQueueGeneration++;
+    state.scanQueue.length = 0;
+    state.activeScan = null;
+    state.scanEntries.length = 0;
+    renderLiveQueue();
+    state.queuedTracking.clear();
+    $("scanQueueLog").replaceChildren();
+    $("scanQueueLog").classList.add("hidden");
     $("appView").classList.add("hidden");
     $("loginView").classList.remove("hidden");
     $("userCode").value = "";
@@ -327,9 +342,8 @@
   function updateStats() {
     const todays = state.parcels.filter(p => p.uploadedDate === state.today);
     const backlog = state.parcels.filter(isBacklog);
-    // Warehouse and Backend daily KPIs only include today's uploads.
-    // Guard House retains its existing cumulative counters.
-    const dailySummary = state.role === "WAREHOUSE" || state.role === "BACKEND";
+    // All roles use today-only upload and checkpoint KPIs.
+    const dailySummary = ["WAREHOUSE", "BACKEND", "GUARDHOUSE"].includes(state.role);
     const datePart = timestamp => String(timestamp || "").slice(0, 10);
     const releasedToday = p => !!p.warehouse && datePart(p.warehouse) === state.today;
     const receivedToday = p => !!p.guardhouse && datePart(p.guardhouse) === state.today;
@@ -622,71 +636,176 @@
     $("stopCameraButton").classList.add("hidden");
   }
 
-  async function onBarcodeDetected(decodedText) {
+  // Manual and camera scans share a sequential submission queue. The input is
+  // available immediately; the server still validates every scan separately.
+  function onBarcodeDetected(decodedText) {
     const tracking = String(decodedText || "").trim();
-    if (!tracking || state.scanBusy || state.processedScans.has(tracking)) return;
-
-    // Barcode libraries can decode the same label many times per second.
-    // Ignore repeat callbacks briefly while the first request is being handled.
+    if (!tracking || state.processedScans.has(tracking) || state.queuedTracking.has(tracking)) return;
     const now = Date.now();
     if (tracking === state.lastDecodedText && now - state.lastDecodedAt < 2500) return;
     state.lastDecodedText = tracking;
     state.lastDecodedAt = now;
-
-    state.scanBusy = true;
-    try {
-      const accepted = await submitScan(tracking);
-      if (accepted) state.processedScans.add(tracking);
-    } finally {
-      state.scanBusy = false;
-      await ensureScannerActive();
-    }
+    state.scanSource = "Camera";
+    enqueueScan(tracking);
   }
 
-  async function manualScan() {
+  function manualScan() {
     const tracking = $("manualTracking").value.trim();
     if (!tracking) {
       showNotice("scanMessage", "Enter a tracking number first.", "error");
       return;
     }
-    if (state.scanBusy) return;
-    state.scanBusy = true;
-    try {
-      const accepted = await submitScan(tracking);
-      if (accepted) state.processedScans.add(tracking);
-    } finally {
-      state.scanBusy = false;
-      await ensureScannerActive();
+    if (!state.token) return;
+    if (state.queuedTracking.has(tracking) || state.processedScans.has(tracking)) {
+      showNotice("scanMessage", "Already queued or scanned: " + tracking, "info");
+      return;
+    }
+    state.scanSource = "Manual";
+    if (enqueueScan(tracking)) {
+      $("manualTracking").value = "";
+      $("manualTracking").focus();
     }
   }
 
-  async function submitScan(trackingNumber) {
-    showNotice("scanMessage", "Checking " + trackingNumber + "…", "info");
-    $("manualScanButton").disabled = true;
-
-    try {
-      const result = await api("scan", {
-        token: state.token,
-        trackingNumber: trackingNumber
-      });
-      if (!result.success) throw new Error(result.error || "Scan was rejected.");
-
-      state.lastScan = result;
-      showLastScan(result);
-      $("manualTracking").value = "";
-      showNotice("scanMessage", "✓ Scan accepted: " + result.tracking + " marked " + result.checkpoint + ". Camera is still active.", "success");
-      playScanFeedback(true);
-      await loadParcels();
-      return true;
-
-    } catch (err) {
-      showNotice("scanMessage", "Scan not accepted: " + err.message, "error");
-      playScanFeedback(false);
+  function enqueueScan(tracking) {
+    if (!state.token || state.role === "BACKEND" || state.queuedTracking.has(tracking) || state.processedScans.has(tracking)) return false;
+    // Cap the queue to prevent unbounded submissions if the network is offline.
+    if (state.scanQueue.length >= 100) {
+      showNotice("scanMessage", "Scan queue is full (100). Wait for submissions to finish.", "error");
       return false;
-    } finally {
-      $("manualScanButton").disabled = false;
-      if (!state.scannerRunning) $("manualTracking").focus();
     }
+    state.queuedTracking.add(tracking);
+    const entry = {id: ++state.scanSequence, tracking, source: state.scanSource || "Manual", status: "Queued", detail: "Waiting for submission", time: new Date().toLocaleTimeString("en-PH", {hour:"2-digit",minute:"2-digit",second:"2-digit"})};
+    state.scanEntries.unshift(entry);
+    if (state.scanEntries.length > 100) state.scanEntries.length = 100;
+    state.scanQueue.push({tracking, token: state.token, generation: state.scanQueueGeneration, entry});
+    renderLiveQueue();
+    showQueueStatus();
+    processScanQueue();
+    return true;
+  }
+
+  function showQueueStatus() {
+    const pending = state.scanQueue.length + (state.scanQueueProcessing ? 1 : 0);
+    if (pending) showNotice("scanMessage", pending + " scan(s) processing or queued. You can enter the next tracking number.", "info");
+  }
+
+  async function processScanQueue() {
+    if (state.scanQueueProcessing) return;
+    state.scanQueueProcessing = true;
+    try {
+      while (state.scanQueue.length) {
+        const item = state.scanQueue.shift();
+        const {tracking, token, generation, entry} = item;
+        state.activeScan = item;
+        entry.status = "Processing";
+        entry.detail = "Sending to Apps Script";
+        renderLiveQueue();
+        try {
+          const result = await api("scan", {token, trackingNumber: tracking});
+          if (!result || !result.success) throw new Error((result && result.error) || "Scan was rejected.");
+          // Ignore stale UI responses after sign-out; server-side action may have completed.
+          if (generation !== state.scanQueueGeneration || token !== state.token) continue;
+          entry.status = "Saved";
+          entry.detail = result.checkpoint || "Confirmed by server";
+          renderLiveQueue();
+          state.processedScans.add(tracking);
+          state.lastScan = result;
+          showLastScan(result);
+          applySuccessfulScan(result);
+          showNotice("scanMessage", "✓ Saved: " + result.tracking + " · " + result.checkpoint +
+            (state.scanQueue.length ? " · " + state.scanQueue.length + " more queued" : ""), "success");
+          playScanFeedback(true);
+          addScanLog(tracking, "Saved", true);
+        } catch (err) {
+          if (generation === state.scanQueueGeneration && token === state.token) {
+            entry.status = "Failed";
+            entry.detail = String(err.message || err);
+            renderLiveQueue();
+            showNotice("scanMessage", "Not saved: " + tracking + " — " + (err.message || err) +
+              (state.scanQueue.length ? " · " + state.scanQueue.length + " more queued" : ""), "error");
+            playScanFeedback(false);
+            addScanLog(tracking, "Failed: " + (err.message || err), false);
+          }
+        } finally {
+          state.activeScan = null;
+          renderLiveQueue();
+          state.queuedTracking.delete(tracking);
+          if (generation === state.scanQueueGeneration) await ensureScannerActive();
+        }
+      }
+    } finally {
+      state.scanQueueProcessing = false;
+      // If scans arrived between the loop ending and cleanup, process them.
+      if (state.scanQueue.length) processScanQueue();
+    }
+  }
+
+  function renderLiveQueue() {
+    const list = $("liveQueueList");
+    if (!list) return;
+    const entries = state.scanEntries;
+    const count = status => entries.filter(item => item.status === status).length;
+    $("queueQueuedCount").textContent = count("Queued").toLocaleString();
+    $("queueProcessingCount").textContent = count("Processing").toLocaleString();
+    $("queueSavedCount").textContent = count("Saved").toLocaleString();
+    $("queueFailedCount").textContent = count("Failed").toLocaleString();
+    $("queuePendingCount").textContent = (count("Queued") + count("Processing")).toLocaleString();
+    list.replaceChildren();
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "queue-empty";
+      empty.textContent = "No scans yet. Camera and manual scans will appear here.";
+      list.appendChild(empty);
+      return;
+    }
+    entries.slice(0, 40).forEach(entry => {
+      const row = document.createElement("div");
+      row.className = "queue-entry";
+      const identity = document.createElement("div");
+      identity.className = "queue-entry-identity";
+      const number = document.createElement("strong");
+      number.textContent = entry.tracking;
+      const meta = document.createElement("small");
+      meta.textContent = entry.source + " · " + entry.time;
+      identity.append(number, meta);
+      const status = document.createElement("span");
+      status.className = "queue-status queue-" + entry.status.toLowerCase();
+      status.textContent = entry.status;
+      status.title = entry.detail;
+      row.append(identity, status);
+      list.appendChild(row);
+    });
+  }
+
+  function addScanLog(tracking, status, success) {
+    const log = $("scanQueueLog");
+    const line = document.createElement("div");
+    line.textContent = (success ? "✓ " : "✗ ") + tracking + " — " + status;
+    line.style.color = success ? "#18744a" : "#b42318";
+    log.prepend(line);
+    while (log.children.length > 12) log.lastElementChild.remove();
+    log.classList.remove("hidden");
+  }
+
+  function applySuccessfulScan(result) {
+    const tracking = String(result.tracking || "").trim().toUpperCase();
+    const parcel = state.parcels.find(p => String(p.tracking || "").trim().toUpperCase() === tracking);
+    if (!parcel) {
+      // A scan succeeded, but its parcel is not in the local snapshot.
+      // Do not invent a record; user can press Refresh.
+      return;
+    }
+    if (state.role === "WAREHOUSE") {
+      parcel.warehouseScanned = result.timestamp || true;
+      parcel.warehouseBy = result.scannedBy || parcel.warehouseBy;
+    } else if (state.role === "GUARDHOUSE") {
+      parcel.guardScanned = result.timestamp || true;
+      parcel.guardhouseBy = result.scannedBy || parcel.guardhouseBy;
+    }
+    updateStats();
+    renderHandover();
+    renderParcels();
   }
 
   // Prepare audio while the user is pressing Start Camera. This helps Chrome

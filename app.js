@@ -12,7 +12,8 @@
     batches: [],
     today: "",
     signatureDrawn: false,
-    visibleCount: 40,
+    visibleCount: 100,
+    summary: null, total: 0, nextOffset: 0, summaryFresh: false,
     scanner: null,
     scannerRunning: false,
     scanBusy: false,
@@ -45,18 +46,10 @@
     $("manualTracking").addEventListener("keydown", (e) => {
       if (e.key === "Enter") manualScan();
     });
-    $("searchInput").addEventListener("input", () => {
-      state.visibleCount = 40;
-      renderParcels();
-    });
-    $("statusFilter").addEventListener("change", () => {
-      state.visibleCount = 40;
-      renderParcels();
-    });
-    $("loadMoreButton").addEventListener("click", () => {
-      state.visibleCount += 40;
-      renderParcels();
-    });
+    let searchTimer;
+    $("searchInput").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadParcels(),450); });
+    $("statusFilter").addEventListener("change", () => {clearTimeout(searchTimer);loadParcels();});
+    $("loadMoreButton").addEventListener("click", () => loadParcels(true));
     $("uploadExcelButton").addEventListener("click", uploadExcelFile);
     $("clearSignature").addEventListener("click", clearSignature);
     $("confirmHandover").addEventListener("click", confirmHandover);
@@ -153,6 +146,7 @@
   }
 
   function onLogout() {
+    if(state.scanQueueProcessing || state.scanQueue.length){showNotice("scanMessage","Wait for queued scans before signing out.","error");return;}
     stopCamera();
     const oldToken = state.token;
     state.token = "";
@@ -160,6 +154,7 @@
     state.userName = "";
     state.parcels = [];
     state.batches = [];
+    state.summary=null;state.summaryFresh=false;state.total=0;state.nextOffset=0;
     state.lastScan = null;
     state.lastDecodedText = "";
     state.lastDecodedAt = 0;
@@ -179,30 +174,31 @@
     if (oldToken) api("logout", { token: oldToken }).catch(() => {});
   }
 
-  let refreshPromise = null;
-  function loadParcels() {
-    if (refreshPromise) return refreshPromise;
-    refreshPromise = loadParcelsInternal().finally(() => { refreshPromise = null; });
+  let refreshPromise = null, refreshAgain = false;
+  function loadParcels(more = false) {
+    if (refreshPromise) { if(more!==true) refreshAgain=true; return refreshPromise; }
+    refreshPromise = loadParcelsInternal(more===true).finally(() => {
+      refreshPromise=null;
+      if(refreshAgain){refreshAgain=false;return loadParcels();}
+    });
     return refreshPromise;
   }
-  async function loadParcelsInternal() {
-    if (!state.token) return;
-    const token = state.token;
-    $("parcelList").innerHTML = '<div class="loading-state">Refreshing parcel records…</div>';
+  async function loadParcelsInternal(more) {
+    if(!state.token) return;
+    const token=state.token, query=$("searchInput").value, filter=$("statusFilter").value;
+    state.summaryFresh=false; renderHandover();
+    $("loadMoreButton").disabled=true;
+    if(!more) $("parcelList").innerHTML='<div class="loading-state">Refreshing parcel records…</div>';
     try {
-      const result = await api("getParcels", { token: state.token });
-      if (!result.success) throw new Error(result.error || "Could not load parcels.");
-      if (token !== state.token) return;
-      state.parcels = result.parcels || [];
-      state.batches = result.batches || [];
-      state.today = result.today || new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Manila"});
-      renderHandover();
-      updateStats();
-      renderParcels();
-    } catch (err) {
-      showNotice("scanMessage", err.message, "error");
-      $("parcelList").innerHTML = '<div class="empty-state">Unable to load parcel records. Try Refresh.</div>';
-    }
+      const result=await api("getParcels",{token,query,filter,offset:more?state.nextOffset:0,limit:100});
+      if(token!==state.token) return;
+      if(!result.success || !result.summary) throw new Error(result.error||"Deploy the matching updated Apps Script first.");
+      if(query!==$("searchInput").value || filter!==$("statusFilter").value){refreshAgain=true;return;}
+      state.parcels=more?Array.from(new Map([...state.parcels,...result.parcels].map(p=>[p.row,p])).values()):result.parcels;
+      state.batches=result.batches; state.today=result.today; state.summary=result.summary; state.total=result.total; state.nextOffset=result.nextOffset;
+      state.summaryFresh=true; updateStats();renderHandover();renderParcels();
+    } catch(err){if(token===state.token){showNotice("scanMessage",err.message,"error");$("parcelList").innerHTML='<div class="empty-state">Unable to load parcel records. Try Refresh.</div>';}}
+    finally {$("loadMoreButton").disabled=false;}
   }
 
   function setupSignaturePad() {
@@ -232,10 +228,10 @@
   }
   function renderHandover() {
     if (state.role === "WAREHOUSE") {
-      const count=state.parcels.filter(p=>p.warehouseScanned && !p.batchId).length;
+      const count=(state.summary?.warehouseReady || 0);
       $("handoverCount").textContent=count+" scanned parcel(s) awaiting warehouse signature and forwarding";
-      $("confirmHandover").disabled=!count;
-      $("openWarehouseHandover").disabled=!count;
+      $("confirmHandover").disabled=!state.summaryFresh || state.scanQueueProcessing || !count;
+      $("openWarehouseHandover").disabled=!state.summaryFresh || state.scanQueueProcessing || !count;
       $("warehouseForwardStatus").textContent = count
         ? count + " scanned parcel(s) ready to forward. Tap here, sign, then confirm."
         : "Scan parcels first. This button becomes available when a parcel is scanned.";
@@ -251,27 +247,28 @@
       }
       open.forEach(b => {
         const id=b.id.trim();
-        const actualCount=state.parcels.filter(p => p.batchId === id).length;
+        const actualCount=b.count;
         const option=document.createElement("option");
         option.value=id;
         option.textContent=id+" ("+actualCount+" parcel"+(actualCount===1?"":"s")+")";
         picker.appendChild(option);
       });
       if(open.some(b=>b.id.trim()===selected)) picker.value=selected;
-      const id=picker.value, parcels=state.parcels.filter(p=>p.batchId===id);
-      const remaining=parcels.filter(p=>!p.guardScanned).length;
+      const id=picker.value, batch=open.find(b=>b.id===id);
+      const remaining=batch?.remaining || 0, count=batch?.count || 0;
       $("handoverCount").textContent=!open.length ? "No batches awaiting guard confirmation" :
-        parcels.length+" forwarded parcels · "+remaining+" still need guard scanning";
-      $("confirmHandover").disabled=!id || remaining!==0 || !parcels.length;
+        count+" forwarded parcels · "+remaining+" still need guard scanning";
+      $("confirmHandover").disabled=!state.summaryFresh || state.scanQueueProcessing || !id || remaining!==0 || !count;
     }
   }
   async function confirmHandover() {
     if (state.scanQueueProcessing || state.scanQueue.length) { showNotice("handoverMessage", "Wait for the scan queue to finish before signing.", "error"); return; }
+    if (!state.summaryFresh) {showNotice("handoverMessage","Refresh the dashboard before signing.","error");return;}
     if (!state.signatureDrawn) {showNotice("handoverMessage","Draw your signature before confirming.","error");return;}
     const warehouse=state.role==="WAREHOUSE";
     const batchId=warehouse?"":$("batchPicker").value;
-    const count=warehouse?state.parcels.filter(p=>p.warehouseScanned&&!p.batchId).length:
-      state.parcels.filter(p=>p.batchId===batchId).length;
+    const count=warehouse?(state.summary?.warehouseReady || 0):
+      (state.batches.find(b=>b.id===batchId)?.count || 0);
     if (!count) return;
     const question=warehouse ? "Forward "+count+" scanned parcels to Guard House with your signature?" :
       "Confirm "+count+" guard-scanned parcels and email the signed PDF to all active recipients?";
@@ -349,56 +346,14 @@
   }
 
   function updateStats() {
-    const todays = state.parcels.filter(p => p.uploadedDate === state.today);
-    const backlog = state.parcels.filter(isBacklog);
-    // All roles use today-only upload and checkpoint KPIs.
-    const dailySummary = ["WAREHOUSE", "BACKEND", "GUARDHOUSE"].includes(state.role);
-    const datePart = timestamp => String(timestamp || "").slice(0, 10);
-    const releasedToday = p => !!p.warehouse && datePart(p.warehouse) === state.today;
-    const receivedToday = p => !!p.guardhouse && datePart(p.guardhouse) === state.today;
-    const warehouse = dailySummary
-      ? todays.filter(releasedToday).length
-      : state.parcels.filter(p => p.warehouse).length;
-    const guard = dailySummary
-      ? todays.filter(p => releasedToday(p) && receivedToday(p)).length
-      : state.parcels.filter(p => p.guardhouse).length;
-    // Preserve existing pending guard receipt and backlog logic.
-    const awaiting = state.parcels.filter(p => p.warehouse && (dailySummary ? !p.guardhouse : !p.guardScanned)).length;
-    const workload = dailySummary
-      ? new Set(todays.map(p => p.tracking))
-      : new Set([...todays, ...backlog].map(p => p.tracking));
-    $("totalCount").textContent = workload.size.toLocaleString();
-    $("backlogCount").textContent = backlog.length.toLocaleString();
-    $("warehouseCount").textContent = warehouse.toLocaleString();
-    $("guardCount").textContent = guard.toLocaleString();
-    $("awaitingCount").textContent = awaiting.toLocaleString();
-    // Today-only outstanding warehouse work: exclude all earlier uploads/backlogs.
-    const todayPending = todays.filter(p => !p.warehouse).length;
-    $("todayPendingCount").textContent = todayPending.toLocaleString();
+    if(!state.summary) return;
+    for(const id of ["totalCount","backlogCount","warehouseCount","guardCount","awaitingCount","todayPendingCount"]) $(id).textContent=Number(state.summary[id]||0).toLocaleString();
   }
-
-  function filteredParcels() {
-    const q = $("searchInput").value.trim().toLowerCase();
-    const filter = $("statusFilter").value;
-    return state.parcels.filter(p => {
-      const matchText = !q || p.tracking.toLowerCase().includes(q) || p.order.toLowerCase().includes(q) || (p.batchId || "").toLowerCase().includes(q);
-      let matchStatus = true;
-      if (filter === "BACKLOG") matchStatus = isBacklog(p);
-      if (filter === "TODAY") matchStatus = p.uploadedDate === state.today;
-      if (filter === "PENDING") matchStatus = !p.warehouse;
-      if (filter === "IN_TRANSIT") matchStatus = !!p.warehouse && !p.guardhouse;
-      if (filter === "COMPLETED") matchStatus = !!p.warehouse && !!p.guardhouse;
-      return matchText && matchStatus;
-    });
-  }
-
   function renderParcels() {
-    const list = $("parcelList");
-    const filtered = filteredParcels();
-    const shown = filtered.slice(0, state.visibleCount);
-    $("recordCount").textContent = filtered.length.toLocaleString() + " records";
-    $("listSummary").textContent = "Showing " + shown.length.toLocaleString() + " of " + filtered.length.toLocaleString() + " matching parcels";
-    $("loadMoreButton").classList.toggle("hidden", shown.length >= filtered.length);
+    const list=$("parcelList"), shown=state.parcels;
+    $("recordCount").textContent=state.total.toLocaleString()+" records";
+    $("listSummary").textContent="Showing "+shown.length.toLocaleString()+" of "+state.total.toLocaleString()+" matching parcels";
+    $("loadMoreButton").classList.toggle("hidden",state.nextOffset>=state.total);
 
     if (!shown.length) {
       list.innerHTML = '<div class="empty-state">No matching parcels found.</div>';
@@ -702,6 +657,7 @@
   async function processScanQueue() {
     if (state.scanQueueProcessing) return;
     state.scanQueueProcessing = true;
+    state.summaryFresh=false; renderHandover();
     try {
       while (state.scanQueue.length) {
         const item = state.scanQueue.shift();
@@ -747,6 +703,7 @@
       state.scanQueueProcessing = false;
       // If scans arrived between the loop ending and cleanup, process them.
       if (state.scanQueue.length) processScanQueue();
+      else if(state.token) loadParcels();
     }
   }
 
@@ -946,7 +903,7 @@
       }
       throw uncertain();
     }
-    await delay(1000);
+    await delay(action === "getParcels" ? 2000 : 1000);
     const result = await read("result");
     if (!result.chunked) return result;
     if (!Number.isInteger(result.chunkCount) || result.chunkCount < 1 || result.chunkCount > 1000) throw uncertain();

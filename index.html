@@ -10,7 +10,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
-  <script defer src="app.js?v=20261125-refreshlock1000"></script>
+  <script defer src="app.js?v=20261125-datefilter1000"></script>
 </head>
 <body>
   <div id="loginView" class="login-screen">
@@ -245,6 +245,15 @@
           </select>
         </div>
 
+        <form id="dateFilterForm" style="display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0">
+          <label style="flex:1 1 160px;min-width:0">Date type
+            <select id="dateField" style="width:100%"><option value="UPLOAD">Uploaded date</option><option value="WAREHOUSE">Warehouse Out</option><option value="GUARD">Guard House Out</option></select>
+          </label>
+          <label style="flex:1 1 140px;min-width:0">From<input id="dateFrom" type="date" style="width:100%"></label>
+          <label style="flex:1 1 140px;min-width:0">To<input id="dateTo" type="date" style="width:100%"></label>
+          <button class="button button-outline button-small" type="submit">Apply dates</button>
+          <button id="clearDateFilter" class="button button-outline button-small" type="button">Clear dates</button>
+        </form>
         <div id="parcelList" class="parcel-list">
           <div class="loading-state">Loading parcel records…</div>
         </div>

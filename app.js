@@ -36,6 +36,7 @@
 
   document.addEventListener("DOMContentLoaded", init);
 
+  let dateRange={dateFrom:"",dateTo:"",dateField:"UPLOAD"};
   function init() {
     $("loginForm").addEventListener("submit", onLogin);
     $("logoutButton").addEventListener("click", onLogout);
@@ -49,6 +50,19 @@
     let searchTimer;
     $("searchInput").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadParcels(),450); });
     $("statusFilter").addEventListener("change", () => {clearTimeout(searchTimer);loadParcels();});
+    $("dateFilterForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const from=$("dateFrom").value,to=$("dateTo").value;
+      $("dateTo").setCustomValidity(from && to && from>to ? "End date must be on or after start date." : "");
+      if (!$("dateFilterForm").reportValidity()) return;
+      dateRange={dateFrom:from,dateTo:to,dateField:$("dateField").value};
+      clearTimeout(searchTimer);loadParcels();
+    });
+    ["dateFrom","dateTo"].forEach(id=>$(id).addEventListener("input",()=>$("dateTo").setCustomValidity("")));
+    $("clearDateFilter").addEventListener("click",()=>{
+      $("dateFilterForm").reset();$("dateTo").setCustomValidity("");
+      dateRange={dateFrom:"",dateTo:"",dateField:"UPLOAD"};clearTimeout(searchTimer);loadParcels();
+    });
     $("loadMoreButton").addEventListener("click", () => loadParcels(true));
     $("uploadExcelButton").addEventListener("click", uploadExcelFile);
     $("clearSignature").addEventListener("click", clearSignature);
@@ -200,14 +214,15 @@
   async function loadParcelsInternal(more) {
     if(!state.token) return;
     const token=state.token, query=$("searchInput").value, filter=$("statusFilter").value;
+    const range=dateRange;
     state.summaryFresh=false; renderHandover();
     $("loadMoreButton").disabled=true;
     if(!more) $("parcelList").innerHTML='<div class="loading-state">Refreshing parcel records…</div>';
     try {
-      const result=await api("getParcels",{token,query,filter,offset:more?state.nextOffset:0,limit:1000});
+      const result=await api("getParcels",{token,query,filter,...range,offset:more?state.nextOffset:0,limit:1000});
       if(token!==state.token) return;
       if(!result.success || !result.summary) throw new Error(result.error||"Deploy the matching updated Apps Script first.");
-      if(query!==$("searchInput").value || filter!==$("statusFilter").value){refreshAgain=true;return;}
+      if(range!==dateRange || query!==$("searchInput").value || filter!==$("statusFilter").value){refreshAgain=true;return;}
       state.parcels=more?Array.from(new Map([...state.parcels,...result.parcels].map(p=>[p.row,p])).values()):result.parcels;
       state.batches=result.batches; state.today=result.today; state.summary=result.summary; state.total=result.total; state.nextOffset=result.nextOffset;
       state.summaryFresh=true; updateStats();renderHandover();renderParcels();

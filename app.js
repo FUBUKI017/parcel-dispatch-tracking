@@ -12,7 +12,7 @@
     batches: [],
     today: "",
     signatureDrawn: false,
-    visibleCount: 100,
+    visibleCount: 1000,
     summary: null, total: 0, nextOffset: 0, summaryFresh: false,
     scanner: null,
     scannerRunning: false,
@@ -190,7 +190,7 @@
     $("loadMoreButton").disabled=true;
     if(!more) $("parcelList").innerHTML='<div class="loading-state">Refreshing parcel records…</div>';
     try {
-      const result=await api("getParcels",{token,query,filter,offset:more?state.nextOffset:0,limit:100});
+      const result=await api("getParcels",{token,query,filter,offset:more?state.nextOffset:0,limit:1000});
       if(token!==state.token) return;
       if(!result.success || !result.summary) throw new Error(result.error||"Deploy the matching updated Apps Script first.");
       if(query!==$("searchInput").value || filter!==$("statusFilter").value){refreshAgain=true;return;}

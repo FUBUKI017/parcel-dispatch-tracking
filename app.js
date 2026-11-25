@@ -179,12 +179,20 @@
     if (oldToken) api("logout", { token: oldToken }).catch(() => {});
   }
 
-  async function loadParcels() {
+  let refreshPromise = null;
+  function loadParcels() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = loadParcelsInternal().finally(() => { refreshPromise = null; });
+    return refreshPromise;
+  }
+  async function loadParcelsInternal() {
     if (!state.token) return;
+    const token = state.token;
     $("parcelList").innerHTML = '<div class="loading-state">Refreshing parcel records…</div>';
     try {
       const result = await api("getParcels", { token: state.token });
       if (!result.success) throw new Error(result.error || "Could not load parcels.");
+      if (token !== state.token) return;
       state.parcels = result.parcels || [];
       state.batches = result.batches || [];
       state.today = result.today || new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Manila"});
@@ -258,6 +266,7 @@
     }
   }
   async function confirmHandover() {
+    if (state.scanQueueProcessing || state.scanQueue.length) { showNotice("handoverMessage", "Wait for the scan queue to finish before signing.", "error"); return; }
     if (!state.signatureDrawn) {showNotice("handoverMessage","Draw your signature before confirming.","error");return;}
     const warehouse=state.role==="WAREHOUSE";
     const batchId=warehouse?"":$("batchPicker").value;
@@ -722,7 +731,7 @@
             entry.status = "Failed";
             entry.detail = String(err.message || err);
             renderLiveQueue();
-            showNotice("scanMessage", "Not saved: " + tracking + " — " + (err.message || err) +
+            showNotice("scanMessage", "Scan not confirmed: " + tracking + " — " + (err.message || err) +
               (state.scanQueue.length ? " · " + state.scanQueue.length + " more queued" : ""), "error");
             playScanFeedback(false);
             addScanLog(tracking, "Failed: " + (err.message || err), false);
@@ -880,7 +889,13 @@
    * POST the operation to Apps Script using a hidden iframe form.
    * Then poll a JSONP endpoint for the short-lived result.
    */
+  let apiTail = Promise.resolve();
   function api(action, fields) {
+    const job = apiTail.then(() => sendApi(action, fields));
+    apiTail = job.catch(() => {});
+    return job;
+  }
+  function sendApi(action, fields) {
     if (!API_URL || API_URL.includes("PASTE_YOUR")) {
       return Promise.reject(new Error("Apps Script API URL is not configured in config.js."));
     }
@@ -909,33 +924,39 @@
     form.submit();
     form.remove();
 
-    return pollResult(requestId, 0);
+    return pollResult(requestId, action);
   }
 
-  function pollResult(requestId, attempt) {
-    if (attempt > 160) {
-      return Promise.reject(new Error("The server did not respond in time. Check the Apps Script deployment and try again."));
+  async function pollResult(requestId, action) {
+    const deadline = Date.now() + 240000;
+    let wait = 1000;
+    const uncertain = () => new Error("Server result unavailable for " + action + ". The operation may have completed. Refresh and verify before submitting again.");
+    async function read(kind, index) {
+      let failures = 0;
+      while (Date.now() < deadline) {
+        try {
+          const result = await jsonp(kind, requestId, index);
+          if (result && !result.pending) return result;
+          failures = 0;
+        } catch (err) {
+          if (++failures >= 5) throw uncertain();
+        }
+        await delay(wait);
+        wait = Math.min(5000, Math.round(wait * 1.5));
+      }
+      throw uncertain();
     }
-
-    return jsonp("result", requestId)
-      .then(async (result) => {
-        if (result && result.pending) {
-          await delay(350);
-          return pollResult(requestId, attempt + 1);
-        }
-        if (result && result.chunked) {
-          const chunks = [];
-          for (let i = 0; i < result.chunkCount; i++) {
-            const part = await jsonp("chunk", requestId, i);
-            if (!part || typeof part.chunk !== "string") {
-              throw new Error("Could not retrieve the full parcel list. Please refresh.");
-            }
-            chunks.push(part.chunk);
-          }
-          return JSON.parse(chunks.join(""));
-        }
-        return result;
-      });
+    await delay(1000);
+    const result = await read("result");
+    if (!result.chunked) return result;
+    if (!Number.isInteger(result.chunkCount) || result.chunkCount < 1 || result.chunkCount > 1000) throw uncertain();
+    const chunks = [];
+    for (let i = 0; i < result.chunkCount; i++) {
+      const part = await read("chunk", i);
+      if (typeof part.chunk !== "string") throw uncertain();
+      chunks.push(part.chunk);
+    }
+    return JSON.parse(chunks.join(""));
   }
 
   function jsonp(action, requestId, index) {
@@ -950,7 +971,9 @@
       });
       if (typeof index === "number") params.set("index", String(index));
 
+      const timer = setTimeout(() => { cleanup(); reject(new Error("Result request timed out")); }, 20000);
       const cleanup = () => {
+        clearTimeout(timer);
         delete window[callbackName];
         script.remove();
       };

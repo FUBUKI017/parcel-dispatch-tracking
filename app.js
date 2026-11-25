@@ -39,7 +39,7 @@
   function init() {
     $("loginForm").addEventListener("submit", onLogin);
     $("logoutButton").addEventListener("click", onLogout);
-    $("refreshButton").addEventListener("click", loadParcels);
+    $("refreshButton").addEventListener("click", () => { if (!refreshPromise) loadParcels(); });
     $("startCameraButton").addEventListener("click", startCamera);
     $("stopCameraButton").addEventListener("click", stopCamera);
     $("manualScanButton").addEventListener("click", manualScan);
@@ -175,11 +175,25 @@
   }
 
   let refreshPromise = null, refreshAgain = false;
+  function setRecordLoading(busy) {
+    const refresh = $("refreshButton");
+    refresh.disabled = busy;
+    refresh.setAttribute("aria-busy", String(busy));
+    refresh.textContent = busy ? "Loading records…" : "↻ Refresh";
+    $("loadMoreButton").disabled = busy;
+  }
   function loadParcels(more = false) {
     if (refreshPromise) { if(more!==true) refreshAgain=true; return refreshPromise; }
-    refreshPromise = loadParcelsInternal(more===true).finally(() => {
+    setRecordLoading(true);
+    refreshPromise = Promise.resolve().then(async () => {
+      await loadParcelsInternal(more===true);
+      while (refreshAgain) {
+        refreshAgain=false;
+        await loadParcelsInternal(false);
+      }
+    }).finally(() => {
       refreshPromise=null;
-      if(refreshAgain){refreshAgain=false;return loadParcels();}
+      setRecordLoading(false);
     });
     return refreshPromise;
   }
@@ -198,7 +212,7 @@
       state.batches=result.batches; state.today=result.today; state.summary=result.summary; state.total=result.total; state.nextOffset=result.nextOffset;
       state.summaryFresh=true; updateStats();renderHandover();renderParcels();
     } catch(err){if(token===state.token){showNotice("scanMessage",err.message,"error");$("parcelList").innerHTML='<div class="empty-state">Unable to load parcel records. Try Refresh.</div>';}}
-    finally {$("loadMoreButton").disabled=false;}
+
   }
 
   function setupSignaturePad() {

@@ -40,7 +40,7 @@
   function init() {
     $("loginForm").addEventListener("submit", onLogin);
     $("logoutButton").addEventListener("click", onLogout);
-    $("refreshButton").addEventListener("click", () => { if (!refreshPromise) loadParcels(); });
+    $("refreshButton").addEventListener("click", refreshWithPageLock);
     $("startCameraButton").addEventListener("click", startCamera);
     $("stopCameraButton").addEventListener("click", stopCamera);
     $("manualScanButton").addEventListener("click", manualScan);
@@ -84,9 +84,18 @@
     }
   }
 
-  function setInitialPageLoading(busy) {
+  async function refreshWithPageLock() {
+    if (!state.token || refreshPromise || !$("initialLoadingOverlay").hidden) return;
+    setInitialPageLoading(true, true);
+    try { await loadParcels(); }
+    finally { setInitialPageLoading(false); }
+  }
+
+  function setInitialPageLoading(busy, refreshing = false) {
     const overlay = $("initialLoadingOverlay");
     if (busy) {
+      $("initialLoadingTitle").textContent = refreshing ? "Refreshing parcel records…" : "Loading parcel records…";
+      $("initialLoadingDescription").textContent = refreshing ? "Please wait while your dashboard is refreshed. Controls will unlock automatically." : "Please wait while your dashboard is prepared. Controls will unlock automatically.";
       overlay.hidden = false;
       overlay.focus({preventScroll:true});
       $("appView").inert = true;
@@ -652,6 +661,7 @@
   // Manual and camera scans share a sequential submission queue. The input is
   // available immediately; the server still validates every scan separately.
   function onBarcodeDetected(decodedText) {
+    if (!$("initialLoadingOverlay").hidden) return;
     const tracking = String(decodedText || "").trim();
     if (!tracking || state.processedScans.has(tracking) || state.queuedTracking.has(tracking)) return;
     const now = Date.now();
@@ -681,6 +691,7 @@
   }
 
   function enqueueScan(tracking) {
+    if (!$("initialLoadingOverlay").hidden) return false;
     if (!state.token || state.role === "BACKEND" || state.queuedTracking.has(tracking) || state.processedScans.has(tracking)) return false;
     // Cap the queue to prevent unbounded submissions if the network is offline.
     if (state.scanQueue.length >= 100) {

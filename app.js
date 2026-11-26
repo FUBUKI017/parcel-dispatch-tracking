@@ -12,7 +12,7 @@
     batches: [],
     today: "",
     signatureDrawn: false,
-    visibleCount: 1000,
+    visibleCount: 500,
     summary: null, total: 0, nextOffset: 0, summaryFresh: false,
     scanner: null,
     scannerRunning: false,
@@ -48,7 +48,7 @@
       if (e.key === "Enter") manualScan();
     });
     let searchTimer;
-    $("searchInput").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadParcels(),450); });
+    $("searchInput").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadParcels(),800); });
     $("statusFilter").addEventListener("change", () => {clearTimeout(searchTimer);loadParcels();});
     $("dateFilterForm").addEventListener("submit", e => {
       e.preventDefault();
@@ -81,6 +81,25 @@
 
     if (!API_URL || API_URL.includes("PASTE_YOUR")) {
       showNotice("loginMessage", "Setup needed: add your Apps Script Web App URL to config.js.", "error");
+    }
+  }
+
+  function setInitialPageLoading(busy) {
+    const overlay = $("initialLoadingOverlay");
+    if (busy) {
+      overlay.hidden = false;
+      overlay.focus({preventScroll:true});
+      $("appView").inert = true;
+      $("loginView").inert = true;
+      $("appView").setAttribute("aria-busy", "true");
+      document.body.classList.add("initial-page-locked");
+    } else {
+      $("appView").inert = false;
+      $("loginView").inert = false;
+      $("appView").removeAttribute("aria-busy");
+      overlay.hidden = true;
+      document.body.classList.remove("initial-page-locked");
+      if (state.token) $("refreshButton").focus({preventScroll:true});
     }
   }
 
@@ -153,9 +172,10 @@
           ? "Scan parcels first. Warehouse Out is recorded only after signing and forwarding."
           : "Scan forwarded parcels first. Guard House Out is recorded only after signing the batch.";
         $("loginMessage").classList.add("hidden");
-        loadParcels();
+        setInitialPageLoading(true);
+        return Promise.resolve().then(() => loadParcels()).finally(() => setInitialPageLoading(false));
       })
-      .catch((err) => showNotice("loginMessage", err.message, "error"))
+      .catch((err) => showNotice(state.token ? "scanMessage" : "loginMessage", err.message, "error"))
       .finally(() => setButtonBusy("loginButton", false, "Sign in"));
   }
 
@@ -219,7 +239,7 @@
     $("loadMoreButton").disabled=true;
     if(!more) $("parcelList").innerHTML='<div class="loading-state">Refreshing parcel records…</div>';
     try {
-      const result=await api("getParcels",{token,query,filter,...range,offset:more?state.nextOffset:0,limit:1000});
+      const result=await api("getParcels",{token,query,filter,...range,offset:more?state.nextOffset:0,limit:500});
       if(token!==state.token) return;
       if(!result.success || !result.summary) throw new Error(result.error||"Deploy the matching updated Apps Script first.");
       if(range!==dateRange || query!==$("searchInput").value || filter!==$("statusFilter").value){refreshAgain=true;return;}
@@ -915,7 +935,7 @@
 
   async function pollResult(requestId, action) {
     const deadline = Date.now() + 240000;
-    let wait = 1000;
+    let wait = 2000;
     const uncertain = () => new Error("Server result unavailable for " + action + ". The operation may have completed. Refresh and verify before submitting again.");
     async function read(kind, index) {
       let failures = 0;
@@ -932,7 +952,7 @@
       }
       throw uncertain();
     }
-    await delay(action === "getParcels" ? 2000 : 1000);
+    await delay(2000);
     const result = await read("result");
     if (!result.chunked) return result;
     if (!Number.isInteger(result.chunkCount) || result.chunkCount < 1 || result.chunkCount > 1000) throw uncertain();
